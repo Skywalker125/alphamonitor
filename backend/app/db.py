@@ -1,6 +1,8 @@
 import json
+import logging
 from datetime import datetime
 from typing import Any
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 import asyncpg
 
@@ -39,6 +41,8 @@ COLUMNS = (
     "buttons, reply, inserted_at"
 )
 
+log = logging.getLogger("alphamonitor.db")
+
 _pool: asyncpg.Pool | None = None
 
 
@@ -46,8 +50,31 @@ async def _init_conn(conn: asyncpg.Connection) -> None:
     await conn.set_type_codec("jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
 
 
+async def ensure_database(database_url: str) -> bool:
+    """Create the database from DATABASE_URL if it doesn't exist. Returns True if created."""
+    url = urlsplit(database_url)
+    name = unquote(url.path.lstrip("/"))
+    if not name:
+        raise ValueError("DATABASE_URL has no database name")
+    try:
+        conn = await asyncpg.connect(database_url)
+        await conn.close()
+        return False
+    except asyncpg.InvalidCatalogNameError:
+        pass
+    # connect to the default "postgres" maintenance database to create ours
+    admin = await asyncpg.connect(urlunsplit(url._replace(path="/postgres")))
+    try:
+        await admin.execute(f'CREATE DATABASE "{name.replace(chr(34), chr(34) * 2)}"')
+    finally:
+        await admin.close()
+    return True
+
+
 async def init(database_url: str) -> asyncpg.Pool:
     global _pool
+    if await ensure_database(database_url):
+        log.info("Created database from DATABASE_URL")
     _pool = await asyncpg.create_pool(database_url, min_size=1, max_size=10, init=_init_conn)
     async with _pool.acquire() as conn:
         await conn.execute(SCHEMA)

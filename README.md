@@ -14,13 +14,17 @@ The backend runs on **8001** because your calls API already uses 8000. It proxie
 
 ## 1. Postgres
 
-Use a local Postgres, or start one with `docker compose up -d postgres`. Then create the database:
+Use a local Postgres, or start one with `docker compose up -d postgres`.
+
+You don't need `psql`/`createdb`: the backend creates the database named in `DATABASE_URL`
+(and the `scan_messages` table) automatically on startup. To do it up front / test the connection:
 
 ```bash
-createdb -U postgres alphamonitor
+cd backend
+python -m app.cli initdb
 ```
 
-The `scan_messages` table is created automatically on backend startup.
+`DATABASE_URL` must use a Postgres user allowed to create databases (e.g. `postgres`) and its real password.
 
 ## 2. Backend
 

@@ -2,6 +2,7 @@
 
     python -m app.cli login        # log the Telethon session in (interactive, once)
     python -m app.cli chats        # list your dialogs with their ids, to fill feeds.json
+    python -m app.cli initdb       # create the database + tables from DATABASE_URL
     python -m app.cli parse FILE   # run the TokenScan parser on a text file
 """
 
@@ -42,10 +43,24 @@ async def chats() -> None:
     await client.disconnect()
 
 
+async def initdb() -> None:
+    from . import db
+
+    try:
+        created = await db.ensure_database(settings.database_url)
+        await db.init(settings.database_url)
+        await db.close()
+    except Exception as e:
+        sys.exit(f"Database setup failed: {type(e).__name__}: {e}\nCheck DATABASE_URL in backend/.env")
+    print("Database created and tables ready." if created else "Database exists, tables ready.")
+
+
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "login":
         asyncio.run(login())
+    elif cmd == "initdb":
+        asyncio.run(initdb())
     elif cmd == "chats":
         asyncio.run(chats())
     elif cmd == "parse" and len(sys.argv) > 2:
