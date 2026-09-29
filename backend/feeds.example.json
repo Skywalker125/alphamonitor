@@ -1,0 +1,30 @@
+[
+  {
+    "key": "scan_1",
+    "title": "Scan Alpha",
+    "description": "TokenScan posts from group A",
+    "chats": ["-1001234567890"],
+    "senders": ["TokenScan"]
+  },
+  {
+    "key": "scan_2",
+    "title": "Scan Beta",
+    "description": "TokenScan posts from group B",
+    "chats": ["some_public_group"],
+    "senders": ["TokenScan"]
+  },
+  {
+    "key": "scan_3",
+    "title": "Scan Gamma",
+    "description": "TokenScan posts from group C",
+    "chats": [],
+    "senders": ["TokenScan"]
+  },
+  {
+    "key": "scan_4",
+    "title": "Scan Delta",
+    "description": "TokenScan posts from group D",
+    "chats": [],
+    "senders": []
+  }
+]

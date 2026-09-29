@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.session
+*.session-journal
+backend/feeds.json
+node_modules/
+dist/
+.pytest_cache/
+.next/
+*.tsbuildinfo
+.env.local

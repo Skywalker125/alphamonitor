@@ -1,0 +1,137 @@
+import json
+from datetime import datetime
+from typing import Any
+
+import asyncpg
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS scan_messages (
+    feed_key     text        NOT NULL,
+    chat_id      bigint      NOT NULL,
+    message_id   bigint      NOT NULL,
+    chat_title   text,
+    chat_username text,
+    sender_id    bigint,
+    sender_name  text,
+    posted_at    timestamptz NOT NULL,
+    edited_at    timestamptz,
+    raw_text     text        NOT NULL,
+    address      text,
+    symbol       text,
+    name         text,
+    market_cap   double precision,
+    parsed       jsonb       NOT NULL DEFAULT '{}'::jsonb,
+    links        jsonb       NOT NULL DEFAULT '[]'::jsonb,
+    buttons      jsonb       NOT NULL DEFAULT '[]'::jsonb,
+    reply        jsonb,
+    inserted_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (feed_key, chat_id, message_id)
+);
+CREATE INDEX IF NOT EXISTS scan_messages_feed_posted_idx
+    ON scan_messages (feed_key, posted_at DESC);
+CREATE INDEX IF NOT EXISTS scan_messages_address_idx
+    ON scan_messages (address);
+"""
+
+COLUMNS = (
+    "feed_key, chat_id, message_id, chat_title, chat_username, sender_id, sender_name, "
+    "posted_at, edited_at, raw_text, address, symbol, name, market_cap, parsed, links, "
+    "buttons, reply, inserted_at"
+)
+
+_pool: asyncpg.Pool | None = None
+
+
+async def _init_conn(conn: asyncpg.Connection) -> None:
+    await conn.set_type_codec("jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
+
+
+async def init(database_url: str) -> asyncpg.Pool:
+    global _pool
+    _pool = await asyncpg.create_pool(database_url, min_size=1, max_size=10, init=_init_conn)
+    async with _pool.acquire() as conn:
+        await conn.execute(SCHEMA)
+    return _pool
+
+
+async def close() -> None:
+    global _pool
+    if _pool:
+        await _pool.close()
+        _pool = None
+
+
+def pool() -> asyncpg.Pool:
+    if _pool is None:
+        raise RuntimeError("database not initialised")
+    return _pool
+
+
+def row_to_item(row: asyncpg.Record) -> dict[str, Any]:
+    item = dict(row)
+    for k in ("posted_at", "edited_at", "inserted_at"):
+        if isinstance(item.get(k), datetime):
+            item[k] = item[k].isoformat()
+    return item
+
+
+async def upsert_scan(rec: dict[str, Any]) -> dict[str, Any]:
+    row = await pool().fetchrow(
+        f"""
+        INSERT INTO scan_messages (
+            feed_key, chat_id, message_id, chat_title, chat_username, sender_id, sender_name,
+            posted_at, edited_at, raw_text, address, symbol, name, market_cap,
+            parsed, links, buttons, reply
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        ON CONFLICT (feed_key, chat_id, message_id) DO UPDATE SET
+            chat_title = EXCLUDED.chat_title,
+            chat_username = EXCLUDED.chat_username,
+            edited_at  = EXCLUDED.edited_at,
+            raw_text   = EXCLUDED.raw_text,
+            address    = COALESCE(EXCLUDED.address, scan_messages.address),
+            symbol     = COALESCE(EXCLUDED.symbol, scan_messages.symbol),
+            name       = COALESCE(EXCLUDED.name, scan_messages.name),
+            market_cap = COALESCE(EXCLUDED.market_cap, scan_messages.market_cap),
+            parsed     = EXCLUDED.parsed,
+            links      = EXCLUDED.links,
+            buttons    = EXCLUDED.buttons,
+            reply      = COALESCE(EXCLUDED.reply, scan_messages.reply)
+        RETURNING {COLUMNS}
+        """,
+        rec["feed_key"],
+        rec["chat_id"],
+        rec["message_id"],
+        rec.get("chat_title"),
+        rec.get("chat_username"),
+        rec.get("sender_id"),
+        rec.get("sender_name"),
+        rec["posted_at"],
+        rec.get("edited_at"),
+        rec["raw_text"],
+        rec.get("address"),
+        rec.get("symbol"),
+        rec.get("name"),
+        rec.get("market_cap"),
+        rec.get("parsed") or {},
+        rec.get("links") or [],
+        rec.get("buttons") or [],
+        rec.get("reply"),
+    )
+    return row_to_item(row)
+
+
+async def list_scans(
+    feed_key: str, limit: int = 50, before: datetime | None = None
+) -> list[dict[str, Any]]:
+    rows = await pool().fetch(
+        f"""
+        SELECT {COLUMNS} FROM scan_messages
+        WHERE feed_key = $1 AND ($2::timestamptz IS NULL OR posted_at < $2)
+        ORDER BY posted_at DESC, message_id DESC
+        LIMIT $3
+        """,
+        feed_key,
+        before,
+        limit,
+    )
+    return [row_to_item(r) for r in rows]
