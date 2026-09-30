@@ -78,10 +78,14 @@ AUTO_ENDPOINTS = [
 ]
 
 
-# Any token works for the probe: an ok reply or an error reply (not_found, api_key_required)
-# both prove the endpoint serves ohlcv_history. Silence means it doesn't.
+# The probe asks for one candle of a real feed token: an ok reply or an error reply
+# (not_found, api_key_required) both prove the endpoint serves ohlcv_history, silence means
+# it doesn't. Wrapped SOL is only a fallback - it's the quote side of most pools, not a
+# token with its own pool, and the server may never answer for it.
 PROBE_MINT = "So11111111111111111111111111111111111111112"
-PROBE_TIMEOUT = 8
+# Shrine can take a few seconds to answer the first request on a connection.
+PROBE_TIMEOUT = 25
+CALL_TIMEOUT = 30
 
 
 def endpoints_for(url: str | None, socketio_path: str | None = None) -> list[Endpoint]:
@@ -166,13 +170,14 @@ class ChartService:
         if self._task:
             self._task.cancel()
 
-    async def _connect(self) -> bool:
+    async def _connect(self, probe_mint: str | None = None) -> bool:
         if self.sio.connected:
             return True
         self.attempts = []
+        probe = probe_mint or next(iter(self.wanted), None) or PROBE_MINT
         # the endpoint that worked before goes first
         for ep in sorted(self.endpoints, key=lambda ep: ep != self.endpoint):
-            if await self._try_endpoint(ep):
+            if await self._try_endpoint(ep, probe):
                 return True
         # a wrong or disabled key is refused at the handshake
         self.error = "connect failed: " + " | ".join(a[5:] for a in self.attempts)
@@ -185,7 +190,7 @@ class ChartService:
         except Exception:
             pass
 
-    async def _try_endpoint(self, ep: Endpoint) -> bool:
+    async def _try_endpoint(self, ep: Endpoint, probe_mint: str) -> bool:
         # direct WebSocket first (what Shrine's example uses), then the standard
         # polling -> WebSocket upgrade, which gets through where a direct upgrade is refused
         for transports in (["websocket"], ["polling", "websocket"]):
@@ -209,18 +214,23 @@ class ChartService:
 
             # Connected - but a server can accept connections without serving candles.
             # Any reply (ok, not_found, api_key_required...) proves it serves ohlcv_history.
+            started = time.monotonic()
             try:
                 ack = await self.sio.call(
-                    "ohlcv_history", {"mint": PROBE_MINT, "limit": 1},
+                    "ohlcv_history", {"mint": probe_mint, "limit": 1},
                     namespace=ep.namespace, timeout=self.probe_timeout,
                 )
                 why = f"unexpected reply {ack!r:.80}"
             except Exception as e:
-                ack, why = None, describe_error(e)
+                ack = None
+                why = describe_error(e)
+                if isinstance(e, (TimeoutError, asyncio.TimeoutError)) or "Timeout" in why:
+                    why = f"no reply within {self.probe_timeout:.0f}s for {probe_mint}"
+            took = time.monotonic() - started
             if isinstance(ack, dict):
                 self.endpoint, self.error = ep, None
                 reply = "ok" if ack.get("ok") else (ack.get("error") or ack.get("message"))
-                self.attempts.append(f"OK   {how}: ohlcv_history answered ({reply})")
+                self.attempts.append(f"OK   {how}: ohlcv_history answered ({reply}) in {took:.1f}s")
                 log.info("Connected to Shrine OHLCV at %s", ep.label())
                 return True
             self.attempts.append(f"FAIL {how}: connected, but no answer to ohlcv_history ({why})")
@@ -254,7 +264,7 @@ class ChartService:
     async def _refresh(self, mint: str) -> None:
         try:
             ack = await self.sio.call(
-                "ohlcv_history", {"mint": mint, "limit": 500}, namespace=self.namespace, timeout=15
+                "ohlcv_history", {"mint": mint, "limit": 500}, namespace=self.namespace, timeout=CALL_TIMEOUT
             )
         except Exception as e:
             self.cache.setdefault(mint, {})["error"] = str(e) or type(e).__name__

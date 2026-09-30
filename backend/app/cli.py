@@ -44,6 +44,24 @@ async def chats() -> None:
     await client.disconnect()
 
 
+def latest_feed_token() -> str:
+    """The newest token address from the feeds (a real token with a pool)."""
+    from .database import db
+
+    db.init_sync()
+    conn = db.get_connection()
+    try:
+        row = conn.execute(
+            "SELECT address FROM scan_messages WHERE address IS NOT NULL "
+            "ORDER BY posted_at DESC LIMIT 1"
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        sys.exit("No token in the feeds yet: run  python -m app.cli charts-check <token address>")
+    return row["address"]
+
+
 async def charts_check(mint: str) -> None:
     import time
 
@@ -53,8 +71,8 @@ async def charts_check(mint: str) -> None:
                        socketio_path=settings.shrine_socketio_path)
     if not svc.enabled:
         sys.exit("SHRINE_API_KEY is not set in backend/.env")
-    print(f"Trying {len(svc.endpoints)} endpoint(s) ...")
-    ok = await svc._connect()
+    print(f"Trying {len(svc.endpoints)} endpoint(s) with token {mint} ...")
+    ok = await svc._connect(probe_mint=mint)
     for line in svc.attempts:
         print("  " + line)
     if not ok:
@@ -63,8 +81,10 @@ async def charts_check(mint: str) -> None:
     print(f"Connected to {ep.label()}")
     print(f"(to pin it: SHRINE_DATA_URL={ep.server}{'' if ep.namespace == '/' else ep.namespace}"
           f"{'' if ep.path == 'socket.io' else f' and SHRINE_SOCKETIO_PATH={ep.path}'})")
-    print("Requesting ohlcv_history for", mint)
+    print("Requesting ohlcv_history (500 candles) for", mint)
+    started = time.monotonic()
     await svc._refresh(mint)
+    print(f"(reply after {time.monotonic() - started:.1f}s)")
     entry = svc.cache.get(mint, {})
     if entry.get("error"):
         print("Reply error:", entry["error"])
@@ -88,8 +108,7 @@ def main() -> None:
         total, changed = db.reparse_all(parse_message)
         print(f"Re-parsed {total} messages, {changed} updated.")
     elif cmd == "charts-check":
-        # default: wrapped SOL, which always trades
-        mint = sys.argv[2] if len(sys.argv) > 2 else "So11111111111111111111111111111111111111112"
+        mint = sys.argv[2] if len(sys.argv) > 2 else latest_feed_token()
         asyncio.run(charts_check(mint))
     elif cmd == "parse" and len(sys.argv) > 2:
         with open(sys.argv[2], encoding="utf-8") as f:

@@ -83,7 +83,7 @@ def test_fetches_wanted_mints_and_pushes_charts(monkeypatch):
         assert svc.cache["MintA"]["pool"] == "pool-MintA"
         assert len(svc.cache["MintA"]["points"]) >= 60
         assert svc.cache["UNKNOWN"]["error"] == "not_found"
-        assert calls[0] == {"mint": "So11111111111111111111111111111111111111112", "limit": 1}  # probe
+        assert calls[0] == {"mint": "MintA", "limit": 1}  # probe uses a real wanted token
         chart_calls = [c for c in calls if c["limit"] == 500]
         assert {c["mint"] for c in chart_calls} == {"MintA", "MintB", "UNKNOWN"}
         # the 2-minute windows of successive refreshes are merged into a longer history
