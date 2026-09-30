@@ -1,4 +1,4 @@
-from app.parser import parse_money, parse_tokenscan
+from app.parser import is_token_stats, parse_money, parse_tokenscan
 
 SAMPLE = """🧬 Super Intelligence ($SI)
 └ 💊 🌱 1m 👁 13
@@ -76,3 +76,10 @@ def test_parse_tokenscan_sample():
 
 def test_non_scan_message_has_no_address():
     assert parse_tokenscan("gm everyone, what are we buying?")["address"] is None
+
+
+def test_only_token_stats_messages_count():
+    assert is_token_stats(SAMPLE)
+    assert not is_token_stats("DtFkKBC3Cmi9j3SxBGRUd8gvBLw7nAasrvUJFB69yubM")
+    assert not is_token_stats("")
+    assert not is_token_stats(None)

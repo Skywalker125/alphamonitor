@@ -10,7 +10,7 @@ from telethon.tl.types import MessageEntityTextUrl, MessageEntityUrl
 from .database import db
 from .broadcaster import broadcaster
 from .config import FeedConfig, Settings
-from .parser import parse_tokenscan
+from .parser import is_token_stats, parse_tokenscan
 
 log = logging.getLogger("alphamonitor.telegram")
 
@@ -162,7 +162,7 @@ class TelegramListener:
 
     async def _handle(self, msg: Any, publish: bool) -> None:
         text = msg.raw_text or ""
-        if not text.strip():
+        if not is_token_stats(text):
             return
         feeds = self.chat_feeds.get(msg.chat_id, [])
         if not feeds:
@@ -175,7 +175,6 @@ class TelegramListener:
 
         parsed = parse_tokenscan(text)
         if not parsed.get("address"):
-            # Not a token scan (chatter, commands, ...)
             return
 
         chat = await msg.get_chat()

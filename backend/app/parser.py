@@ -54,6 +54,11 @@ def _float(v: str | None) -> float | None:
         return None
 
 
+def is_token_stats(text: str | None) -> bool:
+    """Only TokenScan's full scan cards carry a "Token Stats" block; skip everything else."""
+    return bool(text) and "token stats" in text.lower()
+
+
 def parse_tokenscan(text: str) -> dict[str, Any]:
     """Extract structured fields from a TokenScan message. Missing fields are left out/None."""
     out: dict[str, Any] = {}

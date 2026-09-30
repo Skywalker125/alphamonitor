@@ -9,6 +9,10 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BACKEND_DIR / ".env")
 
 
+# Only TokenScan posts are scraped unless a feed names other senders.
+DEFAULT_SENDERS = ["TokenScan"]
+
+
 @dataclass
 class FeedConfig:
     key: str
@@ -16,9 +20,8 @@ class FeedConfig:
     description: str = ""
     # Chat usernames, invite-less links, or numeric ids ("-100...").
     chats: list[str | int] = field(default_factory=list)
-    # Optional sender filter: username / display name substrings (case-insensitive).
-    # Empty list means every message in the chats is accepted.
-    senders: list[str] = field(default_factory=list)
+    # Sender filter: username / display name substrings (case-insensitive).
+    senders: list[str] = field(default_factory=lambda: list(DEFAULT_SENDERS))
 
 
 @dataclass
@@ -56,7 +59,7 @@ def _load_feeds(path: str) -> list[FeedConfig]:
             title=f.get("title", f["key"]),
             description=f.get("description", ""),
             chats=list(f.get("chats", [])),
-            senders=list(f.get("senders", [])),
+            senders=list(f.get("senders") or DEFAULT_SENDERS),
         )
         for f in raw
     ]

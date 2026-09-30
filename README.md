@@ -46,8 +46,8 @@ uvicorn app.main:app --port 8001
 ```
 
 - `chats` – numeric chat ids (from `app.cli chats`) or public usernames. A chat can appear in several feeds.
-- `senders` – optional filter: only messages whose sender username / display name contains one of these strings. Leave empty to accept every message in the chat.
-- Only messages containing a contract address are stored (chatter is ignored). Edits (TokenScan refreshes its stats) update the stored row.
+- `senders` – only messages whose sender username / display name contains one of these strings are kept. Defaults to `["TokenScan"]` when left out or empty.
+- Only TokenScan scan cards are stored: the message must contain **"Token Stats"** and a contract address (chatter, commands and other bot replies are ignored). Edits (TokenScan refreshes its stats) update the stored row.
 - On startup the last `BACKFILL_LIMIT` messages of every chat are imported.
 
 Telethon logs in as your **user account** (bots can't read other bots' messages), so you must be a member of every chat you list.

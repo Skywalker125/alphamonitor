@@ -25,6 +25,6 @@
     "title": "Scan Delta",
     "description": "TokenScan posts from group D",
     "chats": [],
-    "senders": []
+    "senders": ["TokenScan"]
   }
 ]
