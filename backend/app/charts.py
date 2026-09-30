@@ -10,6 +10,7 @@ import asyncio
 import logging
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 import socketio
 
@@ -20,6 +21,19 @@ log = logging.getLogger("alphamonitor.charts")
 WANT_TTL = 90  # a mint is dropped when no browser asked for it for this long
 MAX_MINTS = 20
 MAX_POINTS = 120  # points sent per chart
+# ohlcv_history only holds the last ~2 minutes, so candles from every refresh are merged
+# per token; keep this much history for the chart.
+HISTORY_SECONDS = 30 * 60
+
+
+def split_namespace(url: str) -> tuple[str, str]:
+    """'https://shrine.trade/solana' -> ('https://shrine.trade', '/solana').
+
+    In socket.io-client (JS) the URL path is the namespace; python-socketio would instead
+    append /socket.io/ to it and hit a page that doesn't exist.
+    """
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}", parts.path.rstrip("/") or "/"
 
 
 def to_points(candles: list[list[float]], max_points: int = MAX_POINTS) -> list[list[float]]:
@@ -42,13 +56,32 @@ def to_points(candles: list[list[float]], max_points: int = MAX_POINTS) -> list[
     return [buckets[b] for b in sorted(buckets)]
 
 
+def describe_error(e: BaseException) -> str:
+    """The exception plus whatever it hides: python-engineio raises a bare
+    'Connection error' and keeps the real aiohttp/SSL/DNS error only as its context."""
+    parts, seen, cur = [], set(), e
+    while cur is not None and id(cur) not in seen and len(parts) < 4:
+        seen.add(id(cur))
+        text = str(cur) or type(cur).__name__
+        if not parts or text not in parts[-1]:
+            parts.append(text if cur is e else f"{type(cur).__name__}: {text}")
+        cur = cur.__cause__ or cur.__context__
+    out = " <- ".join(parts)
+    if "namespaces failed to connect" in out:
+        out += " (the server refused the handshake: check SHRINE_API_KEY)"
+    return out
+
+
 class ChartService:
     def __init__(self, url: str, api_key: str | None, refresh_seconds: float = 10) -> None:
         self.url = url
+        self.server_url, self.namespace = split_namespace(url)
         self.api_key = api_key
         self.refresh_seconds = refresh_seconds
         self.wanted: dict[str, float] = {}
         self.cache: dict[str, dict[str, Any]] = {}
+        # mint -> {second: candle}, merged across refreshes
+        self.candles: dict[str, dict[int, list[float]]] = {}
         self.error: str | None = None if api_key else "SHRINE_API_KEY not set"
         self.sio = socketio.AsyncClient(reconnection=True, reconnection_delay=2, reconnection_delay_max=60)
         self._task: asyncio.Task | None = None
@@ -93,18 +126,31 @@ class ChartService:
     async def _connect(self) -> bool:
         if self.sio.connected:
             return True
-        try:
-            await self.sio.connect(
-                self.url, transports=["websocket"], auth={"api_key": self.api_key}, wait_timeout=15
-            )
-            self.error = None
-            log.info("Connected to Shrine OHLCV")
-            return True
-        except Exception as e:
-            # a wrong or disabled key is refused at the handshake
-            self.error = f"connect failed: {e or type(e).__name__}"
-            log.warning("Shrine OHLCV %s", self.error)
-            return False
+        errors = []
+        # direct WebSocket first (what Shrine's example uses), then the standard
+        # polling -> WebSocket upgrade, which gets through where a direct upgrade is refused
+        for transports in (["websocket"], ["polling", "websocket"]):
+            try:
+                await self.sio.connect(
+                    self.server_url,
+                    namespaces=[self.namespace],
+                    transports=transports,
+                    auth={"api_key": self.api_key},
+                    wait_timeout=15,
+                )
+                self.error = None
+                log.info("Connected to Shrine OHLCV (%s, namespace %s)", "+".join(transports), self.namespace)
+                return True
+            except Exception as e:
+                errors.append(f"{'+'.join(transports)}: {describe_error(e)}")
+                try:
+                    await self.sio.disconnect()
+                except Exception:
+                    pass
+        # a wrong or disabled key is refused at the handshake
+        self.error = "connect failed: " + " | ".join(errors)
+        log.warning("Shrine OHLCV %s", self.error)
+        return False
 
     async def _run(self) -> None:
         backoff = 5.0
@@ -113,6 +159,7 @@ class ChartService:
             for m in [m for m, t in self.wanted.items() if now - t > WANT_TTL]:
                 del self.wanted[m]
                 self.cache.pop(m, None)
+                self.candles.pop(m, None)
             if self.wanted:
                 if await self._connect():
                     backoff = 5.0
@@ -130,7 +177,9 @@ class ChartService:
 
     async def _refresh(self, mint: str) -> None:
         try:
-            ack = await self.sio.call("ohlcv_history", {"mint": mint, "limit": 500}, timeout=15)
+            ack = await self.sio.call(
+                "ohlcv_history", {"mint": mint, "limit": 500}, namespace=self.namespace, timeout=15
+            )
         except Exception as e:
             self.cache.setdefault(mint, {})["error"] = str(e) or type(e).__name__
             return
@@ -140,7 +189,14 @@ class ChartService:
             if err in ("api_key_required", "invalid_api_key"):
                 self.error = err
             return
-        points = to_points(ack.get("data") or ack.get("candles") or [])
+        merged = self.candles.setdefault(mint, {})
+        for c in ack.get("data") or ack.get("candles") or []:
+            if isinstance(c, (list, tuple)) and len(c) >= 5:
+                merged[int(c[0] // 1000)] = list(c)
+        cutoff = max(merged, default=0) - HISTORY_SECONDS
+        for sec in [s for s in merged if s < cutoff]:
+            del merged[sec]
+        points = to_points(list(merged.values()))
         entry = {"mint": mint, "pool": ack.get("pool"), "points": points, "updated_at": time.time()}
         previous = self.cache.get(mint, {}).get("points")
         self.cache[mint] = entry

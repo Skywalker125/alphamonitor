@@ -61,7 +61,10 @@ Telethon logs in as your **user account** (bots can't read other bots' messages)
   falling), from 1-second candles of Shrine's data API. Set `SHRINE_API_KEY=sk_...` in `backend/.env`.
   The backend holds the single keyed Shrine connection (Shrine allows one candle socket per IP, and the
   key never reaches the browser), fetches each chart token once however many feeds show it, and
-  refreshes every `CHART_REFRESH_SECONDS` (10). Status: `charts` in `/api/status`.
+  refreshes every `CHART_REFRESH_SECONDS` (10). Shrine's `ohlcv_history` only holds ~2 minutes, so
+  the candles of every refresh are merged per token (up to 30 minutes of history).
+  Status: `charts` in `/api/status`. Test the key and connection with
+  `python -m app.cli charts-check [MINT]`: it prints the full underlying error if it fails.
 
 ### API
 
