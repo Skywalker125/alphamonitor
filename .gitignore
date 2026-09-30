@@ -13,3 +13,4 @@ dist/
 *.tsbuildinfo
 .env.local
 backend/data/
+next-env.d.ts
