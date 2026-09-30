@@ -7,7 +7,7 @@ from typing import Any
 from telethon import TelegramClient, events, utils
 from telethon.tl.types import MessageEntityTextUrl, MessageEntityUrl
 
-from . import db
+from .database import db
 from .broadcaster import broadcaster
 from .config import FeedConfig, Settings
 from .parser import parse_tokenscan

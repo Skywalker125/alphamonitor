@@ -1,39 +1,13 @@
 import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 import asyncpg
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS scan_messages (
-    feed_key     text        NOT NULL,
-    chat_id      bigint      NOT NULL,
-    message_id   bigint      NOT NULL,
-    chat_title   text,
-    chat_username text,
-    sender_id    bigint,
-    sender_name  text,
-    posted_at    timestamptz NOT NULL,
-    edited_at    timestamptz,
-    raw_text     text        NOT NULL,
-    address      text,
-    symbol       text,
-    name         text,
-    market_cap   double precision,
-    parsed       jsonb       NOT NULL DEFAULT '{}'::jsonb,
-    links        jsonb       NOT NULL DEFAULT '[]'::jsonb,
-    buttons      jsonb       NOT NULL DEFAULT '[]'::jsonb,
-    reply        jsonb,
-    inserted_at  timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (feed_key, chat_id, message_id)
-);
-CREATE INDEX IF NOT EXISTS scan_messages_feed_posted_idx
-    ON scan_messages (feed_key, posted_at DESC);
-CREATE INDEX IF NOT EXISTS scan_messages_address_idx
-    ON scan_messages (address);
-"""
+SCHEMA_FILE = Path(__file__).with_name("schema.sql")
 
 COLUMNS = (
     "feed_key, chat_id, message_id, chat_title, chat_username, sender_id, sender_name, "
@@ -77,7 +51,7 @@ async def init(database_url: str) -> asyncpg.Pool:
         log.info("Created database from DATABASE_URL")
     _pool = await asyncpg.create_pool(database_url, min_size=1, max_size=10, init=_init_conn)
     async with _pool.acquire() as conn:
-        await conn.execute(SCHEMA)
+        await conn.execute(SCHEMA_FILE.read_text(encoding="utf-8"))
     return _pool
 
 

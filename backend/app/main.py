@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from . import db
+from .database import db
 from .broadcaster import broadcaster
 from .config import settings
 from .telegram_listener import TelegramListener

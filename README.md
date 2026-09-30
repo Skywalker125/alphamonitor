@@ -16,13 +16,15 @@ The backend runs on **8001** because your calls API already uses 8000. It proxie
 
 Use a local Postgres, or start one with `docker compose up -d postgres`.
 
-You don't need `psql`/`createdb`: the backend creates the database named in `DATABASE_URL`
-(and the `scan_messages` table) automatically on startup. To do it up front / test the connection:
+Create the database and tables (no `psql`/`createdb` needed):
 
 ```bash
 cd backend
-python -m app.cli initdb
+python app/database/init.py
 ```
+
+This creates the database named in `DATABASE_URL` if it's missing and applies
+`app/database/schema.sql`. It is safe to re-run, and the backend does the same on startup.
 
 `DATABASE_URL` must use a Postgres user allowed to create databases (e.g. `postgres`) and its real password.
 
