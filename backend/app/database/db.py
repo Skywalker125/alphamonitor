@@ -168,3 +168,39 @@ async def list_scans(
     feed_key: str, limit: int = 50, before: datetime | None = None
 ) -> list[dict[str, Any]]:
     return await asyncio.to_thread(_list_scans, feed_key, limit, before)
+
+
+def reparse_all(parse) -> tuple[int, int]:
+    """Re-run `parse` over every stored raw_text (after a parser fix). Returns (rows, changed)."""
+    with _write_lock:
+        conn = get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT feed_key, chat_id, message_id, raw_text, parsed FROM scan_messages"
+            ).fetchall()
+            changed = 0
+            conn.execute("BEGIN IMMEDIATE")
+            for r in rows:
+                p = parse(r["raw_text"])
+                new = json.dumps(p)
+                if new == r["parsed"]:
+                    continue
+                conn.execute(
+                    """
+                    UPDATE scan_messages
+                    SET parsed = ?, address = COALESCE(?, address), symbol = COALESCE(?, symbol),
+                        name = COALESCE(?, name), market_cap = ?
+                    WHERE feed_key = ? AND chat_id = ? AND message_id = ?
+                    """,
+                    (new, p.get("address"), p.get("symbol"), p.get("name"), p.get("market_cap"),
+                     r["feed_key"], r["chat_id"], r["message_id"]),
+                )
+                changed += 1
+            conn.execute("COMMIT")
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+    return len(rows), changed

@@ -2,6 +2,7 @@
 
     python -m app.cli login        # log the Telethon session in (interactive, once)
     python -m app.cli chats        # list your dialogs with their ids, to fill feeds.json
+    python -m app.cli reparse      # re-run the parser over every stored message
     python -m app.cli parse FILE   # run the TokenScan parser on a text file
 """
 
@@ -48,6 +49,12 @@ def main() -> None:
         asyncio.run(login())
     elif cmd == "chats":
         asyncio.run(chats())
+    elif cmd == "reparse":
+        from .database import db
+
+        db.init_sync()
+        total, changed = db.reparse_all(parse_tokenscan)
+        print(f"Re-parsed {total} messages, {changed} updated.")
     elif cmd == "parse" and len(sys.argv) > 2:
         with open(sys.argv[2], encoding="utf-8") as f:
             print(json.dumps(parse_tokenscan(f.read()), indent=2, ensure_ascii=False))

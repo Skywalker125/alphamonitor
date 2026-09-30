@@ -62,7 +62,8 @@ Telethon logs in as your **user account** (bots can't read other bots' messages)
 | `GET /api/stream` | SSE stream, `scan` events: `{feed, item}` |
 | `GET /api/status` | Telethon listener state and per-chat resolution errors |
 
-Run the parser tests with `pytest` in `backend/`.
+Run the parser tests with `pytest` in `backend/`. After a parser change, fix already stored
+messages with `python -m app.cli reparse` (no need to delete the database).
 
 ## 3. Frontend
 

@@ -83,3 +83,55 @@ def test_only_token_stats_messages_count():
     assert not is_token_stats("DtFkKBC3Cmi9j3SxBGRUd8gvBLw7nAasrvUJFB69yubM")
     assert not is_token_stats("")
     assert not is_token_stats(None)
+
+
+# Same card as the second screenshot, written with other tree glyphs, emoji
+# placeholders, zero-width marks and NBSPs - the variants that broke the stats.
+VARIANT = (
+    "🔲 Super Intelligence ($SI)\n"
+    "┗🟦🟨 🌱 387d 👁 71\n"
+    "\n"
+    "📶 Token Stats\n"
+    "┣​ MC:   $54.9K\n"
+    "┣ 🔹ATH: $61.98K (-11.42% / 1m)\n"
+    "╠ USD:  0.00005562 (1.27K%)\n"
+    "┠─ LIQ:  $21.64K\n"
+    "⎬ VOL： $131.8K (24h)\n"
+    "‣ 1H:   B 492 / S 293 (67.92%)\n"
+    "┣ HLD:⁠ 242\n"
+    "┣ P:    C3U...9mwn 💊\n"
+    "╰ DEV:  2EE...hQAs\n"
+    "\n"
+    "🔗 Socials [2h]\n"
+    "└ Web • 𝕏 • About\n"
+    "\n"
+    "🛡 Audit 🟧 8/10\n"
+    "🟩 DEX [PAID] [info]\n"
+    "🟥 Top 10 Holders [27.55%]\n"
+    "🟧 Bundled [25.75%]\n"
+    "\n"
+    "DtFkKBC3Cmi9j3SxBGRUd8gvBLw7nAasrvUJFB69yubM\n"
+)
+
+
+def test_parse_tokenscan_variant_glyphs():
+    p = parse_tokenscan(VARIANT)
+    assert p["market_cap"] == 54900
+    assert p["ath"] == 61980
+    assert p["price_usd"] == 0.00005562
+    assert p["liquidity"] == 21640
+    assert p["volume"] == 131800
+    assert p["buys_1h"] == 492 and p["sells_1h"] == 293
+    assert p["holders"] == 242
+    assert p["pair_short"] == "C3U...9mwn"
+    assert p["dev_short"] == "2EE...hQAs"
+    assert p["audit_score"] == 8 and p["audit_max"] == 10
+    assert p["dex_paid"] is True
+    assert p["top10_pct"] == 27.55
+    assert p["bundled_pct"] == 25.75
+    assert p["age"] == "387d" and p["views"] == 71
+
+
+def test_other_lines_are_not_stats():
+    p = parse_tokenscan("💭 NEW: Introducing community /thesis\nTOP: 5\nCAP: 1")
+    assert "market_cap" not in p and "pair_short" not in p
