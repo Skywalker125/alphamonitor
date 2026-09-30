@@ -83,8 +83,9 @@ def test_fetches_wanted_mints_and_pushes_charts(monkeypatch):
         assert svc.cache["MintA"]["pool"] == "pool-MintA"
         assert len(svc.cache["MintA"]["points"]) >= 60
         assert svc.cache["UNKNOWN"]["error"] == "not_found"
-        assert {c["mint"] for c in calls} == {"MintA", "MintB", "UNKNOWN"}
-        assert all(c["limit"] == 500 for c in calls)
+        assert calls[0] == {"mint": "So11111111111111111111111111111111111111112", "limit": 1}  # probe
+        chart_calls = [c for c in calls if c["limit"] == 500]
+        assert {c["mint"] for c in chart_calls} == {"MintA", "MintB", "UNKNOWN"}
         # the 2-minute windows of successive refreshes are merged into a longer history
         assert await wait_for(lambda: len(svc.candles["MintA"]) > 60)
         # the same address asked for again (another feed, another tab) is fetched once per round
@@ -158,11 +159,15 @@ def test_falls_through_to_the_endpoint_that_works():
         svc = ChartService(None, "sk_test", refresh_seconds=0.3, endpoints=[
             Endpoint(base, "/", "nothing/socket.io"),  # 404, like shrine.trade/socket.io/
             Endpoint(f"http://127.0.0.1:{free_port()}", "/solana"),  # nothing listening
+            Endpoint(base, "/"),  # connects, but never answers ohlcv_history (sol.shrine.trade "/")
             Endpoint(base, NS),  # the real one
         ])
+        svc.probe_timeout = 1
         assert await svc._connect()
         assert svc.endpoint == Endpoint(base, NS)
-        assert [a[:4] for a in svc.attempts] == ["FAIL", "FAIL", "FAIL", "OK  "]
+        assert [a[:4] for a in svc.attempts] == ["FAIL", "FAIL", "FAIL", "FAIL", "OK  "]
+        assert "no answer to ohlcv_history" in svc.attempts[3]
+        assert "ohlcv_history answered (ok)" in svc.attempts[4]
         assert "404" in svc.attempts[0] and len([a for a in svc.attempts if "nothing/socket.io" in a]) == 1
         ack = await svc.sio.call("ohlcv_history", {"mint": "M", "limit": 500}, namespace=svc.namespace, timeout=5)
         assert ack["ok"]

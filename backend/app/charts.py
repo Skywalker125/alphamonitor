@@ -78,6 +78,12 @@ AUTO_ENDPOINTS = [
 ]
 
 
+# Any token works for the probe: an ok reply or an error reply (not_found, api_key_required)
+# both prove the endpoint serves ohlcv_history. Silence means it doesn't.
+PROBE_MINT = "So11111111111111111111111111111111111111112"
+PROBE_TIMEOUT = 8
+
+
 def endpoints_for(url: str | None, socketio_path: str | None = None) -> list[Endpoint]:
     if not url or url.strip().lower() == "auto":
         return list(AUTO_ENDPOINTS)
@@ -107,6 +113,7 @@ class ChartService:
         self.endpoints = endpoints or endpoints_for(url, socketio_path)
         self.endpoint: Endpoint | None = None  # the one that worked
         self.attempts: list[str] = []
+        self.probe_timeout = PROBE_TIMEOUT
         self.api_key = api_key
         self.refresh_seconds = refresh_seconds
         self.wanted: dict[str, float] = {}
@@ -164,36 +171,61 @@ class ChartService:
             return True
         self.attempts = []
         # the endpoint that worked before goes first
-        order = sorted(self.endpoints, key=lambda ep: ep != self.endpoint)
-        for ep in order:
-            # direct WebSocket first (what Shrine's example uses), then the standard
-            # polling -> WebSocket upgrade, which gets through where a direct upgrade is refused
-            for transports in (["websocket"], ["polling", "websocket"]):
-                try:
-                    await self.sio.connect(
-                        ep.server,
-                        namespaces=[ep.namespace],
-                        socketio_path=ep.path,
-                        transports=transports,
-                        auth={"api_key": self.api_key},
-                        wait_timeout=15,
-                    )
-                    self.endpoint, self.error = ep, None
-                    self.attempts.append(f"OK   {ep.label()} ({'+'.join(transports)})")
-                    log.info("Connected to Shrine OHLCV at %s", ep.label())
-                    return True
-                except Exception as e:
-                    err = describe_error(e)
-                    self.attempts.append(f"FAIL {ep.label()} ({'+'.join(transports)}): {err}")
-                    try:
-                        await self.sio.disconnect()
-                    except Exception:
-                        pass
-                    if "404" in err:
-                        break  # nothing there; polling would 404 too
+        for ep in sorted(self.endpoints, key=lambda ep: ep != self.endpoint):
+            if await self._try_endpoint(ep):
+                return True
         # a wrong or disabled key is refused at the handshake
         self.error = "connect failed: " + " | ".join(a[5:] for a in self.attempts)
         log.warning("Shrine OHLCV %s", self.error)
+        return False
+
+    async def _disconnect_quietly(self) -> None:
+        try:
+            await self.sio.disconnect()
+        except Exception:
+            pass
+
+    async def _try_endpoint(self, ep: Endpoint) -> bool:
+        # direct WebSocket first (what Shrine's example uses), then the standard
+        # polling -> WebSocket upgrade, which gets through where a direct upgrade is refused
+        for transports in (["websocket"], ["polling", "websocket"]):
+            how = f"{ep.label()} ({'+'.join(transports)})"
+            try:
+                await self.sio.connect(
+                    ep.server,
+                    namespaces=[ep.namespace],
+                    socketio_path=ep.path,
+                    transports=transports,
+                    auth={"api_key": self.api_key},
+                    wait_timeout=15,
+                )
+            except Exception as e:
+                err = describe_error(e)
+                self.attempts.append(f"FAIL {how}: {err}")
+                await self._disconnect_quietly()
+                if "404" in err:
+                    return False  # nothing there; polling would 404 too
+                continue
+
+            # Connected - but a server can accept connections without serving candles.
+            # Any reply (ok, not_found, api_key_required...) proves it serves ohlcv_history.
+            try:
+                ack = await self.sio.call(
+                    "ohlcv_history", {"mint": PROBE_MINT, "limit": 1},
+                    namespace=ep.namespace, timeout=self.probe_timeout,
+                )
+                why = f"unexpected reply {ack!r:.80}"
+            except Exception as e:
+                ack, why = None, describe_error(e)
+            if isinstance(ack, dict):
+                self.endpoint, self.error = ep, None
+                reply = "ok" if ack.get("ok") else (ack.get("error") or ack.get("message"))
+                self.attempts.append(f"OK   {how}: ohlcv_history answered ({reply})")
+                log.info("Connected to Shrine OHLCV at %s", ep.label())
+                return True
+            self.attempts.append(f"FAIL {how}: connected, but no answer to ohlcv_history ({why})")
+            await self._disconnect_quietly()
+            return False  # the other transport reaches the same server
         return False
 
     async def _run(self) -> None:
