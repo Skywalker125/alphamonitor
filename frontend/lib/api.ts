@@ -56,6 +56,7 @@ export type ScanParsed = {
   first_call_mc?: number | null;
   address?: string | null;
   chain?: string | null;
+  socials?: { label: string; url: string; kind: string }[];
 };
 
 export type ScanItem = {
@@ -73,7 +74,7 @@ export type ScanItem = {
   name: string | null;
   market_cap: number | null;
   parsed: ScanParsed;
-  links: { text: string; url: string }[];
+  links: { text: string; url: string; offset?: number }[];
   buttons: { text: string; url: string | null }[];
   reply: { message_id: number; sender_name: string | null; text: string } | null;
 };

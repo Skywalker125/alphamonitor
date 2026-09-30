@@ -171,17 +171,19 @@ async def list_scans(
 
 
 def reparse_all(parse) -> tuple[int, int]:
-    """Re-run `parse` over every stored raw_text (after a parser fix). Returns (rows, changed)."""
+    """Re-run `parse(raw_text, links)` over every stored row (after a parser fix).
+
+    Returns (rows, changed)."""
     with _write_lock:
         conn = get_connection()
         try:
             rows = conn.execute(
-                "SELECT feed_key, chat_id, message_id, raw_text, parsed FROM scan_messages"
+                "SELECT feed_key, chat_id, message_id, raw_text, links, parsed FROM scan_messages"
             ).fetchall()
             changed = 0
             conn.execute("BEGIN IMMEDIATE")
             for r in rows:
-                p = parse(r["raw_text"])
+                p = parse(r["raw_text"], json.loads(r["links"] or "[]"))
                 new = json.dumps(p)
                 if new == r["parsed"]:
                     continue

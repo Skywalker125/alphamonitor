@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import CallsFeed from "@/components/CallsFeed";
 import ScanFeed from "@/components/ScanFeed";
+import Toast from "@/components/Toast";
 import { api, type FeedMeta, type ListenerStatus } from "@/lib/api";
 import { useNow } from "@/lib/format";
 import { onConnection } from "@/lib/stream";
@@ -57,6 +58,7 @@ export default function Home() {
           ))}
         </main>
       )}
+      <Toast />
     </div>
   );
 }

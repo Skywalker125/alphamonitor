@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type CallItem } from "@/lib/api";
 import { fmtUsd, gmgnUrl, parseTs, timeAgo } from "@/lib/format";
-import CopyButton from "./CopyButton";
+import { copyAddress, hasTextSelection } from "@/lib/copy";
 import FeedColumn, { type Filter } from "./FeedColumn";
 import TokenAvatar from "./TokenAvatar";
 
@@ -100,7 +100,12 @@ export default function CallsFeed({ now }: { now: number }) {
         const url = c.pair_url || c.links?.gmgn || gmgnUrl(c.address, c.chain);
         const progress = c.launchpad_progress != null ? Math.round(c.launchpad_progress * 100) : null;
         return (
-          <a key={c.id} className={`row ${fresh.has(c.id) ? "fresh" : ""}`} href={url} target="_blank" rel="noreferrer">
+          <div
+            key={c.id}
+            className={`row ${fresh.has(c.id) ? "fresh" : ""}`}
+            title="Click to copy the token address"
+            onClick={() => !hasTextSelection() && copyAddress(c.address, c.symbol)}
+          >
             <TokenAvatar src={c.image_url} symbol={c.symbol} />
             <div className="row-main">
               <div className="row-line">
@@ -128,9 +133,18 @@ export default function CallsFeed({ now }: { now: number }) {
             </div>
             <div className="row-side">
               <span className="ago">{timeAgo(parseTs(c.first_call_at), now)}</span>
-              <CopyButton value={c.address} />
+              <a
+                className="chip chip-btn"
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                title="Open chart"
+                onClick={(e) => e.stopPropagation()}
+              >
+                ↗
+              </a>
             </div>
-          </a>
+          </div>
         );
       })}
     </FeedColumn>

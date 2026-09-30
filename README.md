@@ -47,6 +47,7 @@ uvicorn app.main:app --port 8001
 
 - `chats` – numeric chat ids (from `app.cli chats`) or public usernames. A chat can appear in several feeds.
 - `senders` – only messages whose sender username / display name contains one of these strings are kept. Defaults to `["TokenScan"]` when left out or empty.
+- The links under **Socials** (Web • 𝕏 • About …) are shown on each row; click a social to open it.
 - Only TokenScan scan cards are stored: the message must contain **"Token Stats"** and a contract address (chatter, commands and other bot replies are ignored). Edits (TokenScan refreshes its stats) update the stored row.
 - On startup the last `BACKFILL_LIMIT` messages of every chat are imported.
 

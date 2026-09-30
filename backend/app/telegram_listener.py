@@ -4,13 +4,13 @@ import asyncio
 import logging
 from typing import Any
 
-from telethon import TelegramClient, events, utils
+from telethon import TelegramClient, events, helpers, utils
 from telethon.tl.types import MessageEntityTextUrl, MessageEntityUrl
 
 from .database import db
 from .broadcaster import broadcaster
 from .config import FeedConfig, Settings
-from .parser import is_token_stats, parse_tokenscan
+from .parser import is_token_stats, parse_message
 
 log = logging.getLogger("alphamonitor.telegram")
 
@@ -36,14 +36,21 @@ def _sender_matches(feed: FeedConfig, sender: Any) -> bool:
     return any(s.lower().lstrip("@") in haystack for s in feed.senders)
 
 
-def _extract_links(msg: Any) -> list[dict[str, str]]:
-    links: list[dict[str, str]] = []
+def _extract_links(msg: Any) -> list[dict[str, Any]]:
+    """Every link in the message with its character offset (used to find the Socials section)."""
+    links: list[dict[str, Any]] = []
+    # Telegram offsets count UTF-16 units; 𝕏 and emoji are two of those but one Python char.
+    surrogated = helpers.add_surrogate(msg.raw_text or "")
     try:
         for ent, text in msg.get_entities_text():
             if isinstance(ent, MessageEntityTextUrl):
-                links.append({"text": text, "url": ent.url})
+                url = ent.url
             elif isinstance(ent, MessageEntityUrl):
-                links.append({"text": text, "url": text})
+                url = text
+            else:
+                continue
+            offset = len(helpers.del_surrogate(surrogated[: ent.offset]))
+            links.append({"text": text, "url": url, "offset": offset})
     except Exception:  # entities may be malformed on edited messages
         log.debug("could not extract entities", exc_info=True)
     return links
@@ -173,7 +180,8 @@ class TelegramListener:
         if not matching:
             return
 
-        parsed = parse_tokenscan(text)
+        links = _extract_links(msg)
+        parsed = parse_message(text, links)
         if not parsed.get("address"):
             return
 
@@ -207,7 +215,7 @@ class TelegramListener:
             "name": parsed.get("name"),
             "market_cap": parsed.get("market_cap"),
             "parsed": parsed,
-            "links": _extract_links(msg),
+            "links": links,
             "buttons": _extract_buttons(msg),
             "reply": reply,
         }

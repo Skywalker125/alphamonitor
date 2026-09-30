@@ -123,3 +123,29 @@ button { font: inherit; color: inherit; }
   .columns { grid-auto-columns: calc(100vw - 16px); }
   .topbar, .page-head { padding-left: 16px; padding-right: 16px; }
 }
+
+.row { user-select: text; }
+.row:active { background: #18202a; }
+.chip-btn.active { color: var(--accent); border-color: var(--accent); }
+a.chip-btn { display: inline-block; line-height: 1.4; }
+
+.socials { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.social {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; color: var(--dim);
+  background: var(--chip); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px;
+}
+.social:hover { color: var(--text); border-color: var(--dim); }
+.social-icon { font-size: 11px; line-height: 1; }
+.social-x { color: var(--text); }
+.social-web:hover { color: var(--accent); border-color: var(--accent); }
+.social-telegram:hover { color: #4fb3ff; border-color: #4fb3ff; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+  background: var(--accent); color: #04110c; font-weight: 700; font-size: 13px;
+  padding: 9px 16px; border-radius: 999px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  z-index: 50; animation: toast-in 0.15s ease-out; max-width: calc(100vw - 32px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }

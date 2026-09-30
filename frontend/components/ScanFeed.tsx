@@ -4,11 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import { api, scanKey, type FeedMeta, type ScanItem } from "@/lib/api";
 import { fmtNum, fmtUsd, gmgnUrl, timeAgo, telegramMsgUrl } from "@/lib/format";
 import { onScan } from "@/lib/stream";
-import CopyButton from "./CopyButton";
+import { copyAddress, hasTextSelection } from "@/lib/copy";
 import FeedColumn, { type Filter } from "./FeedColumn";
 import TokenAvatar from "./TokenAvatar";
 
 const MAX_ITEMS = 200;
+
+const SOCIAL_ICONS: Record<string, string> = {
+  web: "🌐",
+  x: "𝕏",
+  telegram: "✈️",
+  discord: "💬",
+  tiktok: "🎵",
+  youtube: "▶️",
+  instagram: "📷",
+  other: "🔗",
+};
 
 const FILTERS: Filter<ScanItem>[] = [
   { id: "all", label: "All", test: () => true },
@@ -16,6 +27,7 @@ const FILTERS: Filter<ScanItem>[] = [
   { id: "under1m", label: "MCap < $1M", test: (s) => (s.market_cap ?? Infinity) < 1_000_000 },
   { id: "lowbundle", label: "Bundled < 30%", test: (s) => (s.parsed.bundled_pct ?? 100) < 30 },
   { id: "dexpaid", label: "DEX paid", test: (s) => s.parsed.dex_paid === true },
+  { id: "socials", label: "Has socials", test: (s) => (s.parsed.socials?.length ?? 0) > 0 },
 ];
 
 function auditClass(score?: number, max = 10) {
@@ -45,9 +57,14 @@ function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }
     ? [s.reply.sender_name, s.reply.text.split("\n").find((l) => l.trim())].filter(Boolean).join(": ")
     : null;
   const urlButtons = s.buttons.filter((b) => b.url);
+  const socials = p.socials ?? [];
 
   return (
-    <div className={`row scan ${fresh ? "fresh" : ""}`} onClick={() => setOpen((o) => !o)}>
+    <div
+      className={`row scan ${fresh ? "fresh" : ""}`}
+      title={s.address ? "Click to copy the token address" : undefined}
+      onClick={() => s.address && !hasTextSelection() && copyAddress(s.address, s.symbol)}
+    >
       <TokenAvatar src={dexImage(s.address, p.chain)} symbol={s.symbol} />
       <div className="row-main">
         <div className="row-line">
@@ -84,6 +101,24 @@ function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }
           {p.sniped_pct != null && <span>SNP <b className={pctClass(p.sniped_pct, 10, 25)}>{p.sniped_pct}%</b></span>}
           {p.dex_paid != null && <span className={p.dex_paid ? "pos" : "dim"}>{p.dex_paid ? "DEX paid" : "DEX unpaid"}</span>}
         </div>
+        {socials.length > 0 && (
+          <div className="socials">
+            {socials.map((so) => (
+              <a
+                key={so.url}
+                className={`social social-${so.kind}`}
+                href={so.url}
+                target="_blank"
+                rel="noreferrer"
+                title={so.url}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="social-icon">{SOCIAL_ICONS[so.kind] ?? "🔗"}</span>
+                {so.kind === "x" ? null : so.label}
+              </a>
+            ))}
+          </div>
+        )}
         {open && (
           <div className="expand" onClick={(e) => e.stopPropagation()}>
             <div className="links">
@@ -108,7 +143,16 @@ function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }
         <span className="ago" title={new Date(s.posted_at).toLocaleString()}>
           {timeAgo(Date.parse(s.posted_at), now)}
         </span>
-        {s.address && <CopyButton value={s.address} />}
+        <button
+          className={`chip chip-btn ${open ? "active" : ""}`}
+          title={open ? "Hide message" : "Show full message and links"}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+        >
+          {open ? "▴" : "▾"}
+        </button>
         {s.chat_title && <span className="chat" title={s.chat_title}>{s.chat_title}</span>}
       </div>
     </div>

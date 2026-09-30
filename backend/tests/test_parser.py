@@ -1,4 +1,4 @@
-from app.parser import is_token_stats, parse_money, parse_tokenscan
+from app.parser import is_token_stats, parse_message, parse_money, parse_tokenscan
 
 SAMPLE = """🧬 Super Intelligence ($SI)
 └ 💊 🌱 1m 👁 13
@@ -135,3 +135,42 @@ def test_parse_tokenscan_variant_glyphs():
 def test_other_lines_are_not_stats():
     p = parse_tokenscan("💭 NEW: Introducing community /thesis\nTOP: 5\nCAP: 1")
     assert "market_cap" not in p and "pair_short" not in p
+
+
+def _link(text, label, url, nth=0):
+    """A link entity as the listener stores it: label, url and character offset."""
+    idx = -1
+    for _ in range(nth + 1):
+        idx = text.index(label, idx + 1)
+    return {"text": label, "url": url, "offset": idx}
+
+
+def test_socials_from_socials_block_only():
+    links = [
+        _link(SAMPLE, "Web", "https://supint.ai"),
+        _link(SAMPLE, "𝕏", "https://x.com/supint"),
+        _link(SAMPLE, "About", "https://t.me/tokenscan?start=about"),
+        # platform links further down must not count as socials
+        _link(SAMPLE, "DEX", "https://dexscreener.com/solana/x", nth=1),
+        _link(SAMPLE, "𝕏s", "https://x.com/search?q=x"),
+        _link(SAMPLE, "TRT", "https://trojan.app"),
+    ]
+    socials = parse_message(SAMPLE, links)["socials"]
+    assert socials == [
+        {"label": "Web", "url": "https://supint.ai", "kind": "web"},
+        {"label": "𝕏", "url": "https://x.com/supint", "kind": "x"},
+        {"label": "About", "url": "https://t.me/tokenscan?start=about", "kind": "telegram"},
+    ]
+
+
+def test_socials_fallback_without_offsets():
+    links = [
+        {"text": "Web", "url": "https://supint.ai"},
+        {"text": "𝕏s", "url": "https://x.com/search?q=x"},
+        {"text": "TRT", "url": "https://trojan.app"},
+    ]
+    assert [s["label"] for s in parse_message(SAMPLE, links)["socials"]] == ["Web"]
+
+
+def test_no_socials_without_links():
+    assert parse_message(SAMPLE, [])["socials"] == []

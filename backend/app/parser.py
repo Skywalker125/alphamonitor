@@ -148,3 +148,72 @@ def parse_tokenscan(text: str) -> dict[str, Any]:
     out["address"] = address
     out["chain"] = "evm" if address and address.startswith("0x") else ("solana" if address else None)
     return out
+
+
+SOCIALS_HEADER = re.compile(r"^.*\bSocials\b.*$", re.M | re.I)
+
+
+def _social_kind(label: str, url: str) -> str:
+    u, l = url.lower(), label.lower()
+    if "x.com/" in u or "twitter.com/" in u or l in ("x", "𝕏", "twitter"):
+        return "x"
+    if "t.me/" in u or "telegram" in u or l in ("tg", "telegram"):
+        return "telegram"
+    if "discord" in u:
+        return "discord"
+    if "tiktok" in u:
+        return "tiktok"
+    if "youtube" in u or "youtu.be" in u:
+        return "youtube"
+    if "instagram" in u:
+        return "instagram"
+    if l in ("web", "website", "site"):
+        return "web"
+    return "other"
+
+
+def extract_socials(text: str, links: list[dict] | None) -> list[dict[str, str]]:
+    """The links listed in TokenScan's "Socials" block (Web • 𝕏 • About ...).
+
+    The block runs from the "Socials" header to the next blank line. Links carry their
+    character offset; for rows stored before offsets existed, fall back to matching the
+    labels written on those lines.
+    """
+    if not text or not links:
+        return []
+    m = SOCIALS_HEADER.search(text)
+    if not m:
+        return []
+    start = m.start()
+    end = text.find("\n\n", m.end())
+    end = len(text) if end == -1 else end
+    block = text[start:end]
+
+    if any("offset" in ln for ln in links):
+        picked = [ln for ln in links if start <= ln.get("offset", -1) < end]
+    else:
+        picked, used = [], set()
+        for ln in links:
+            label = (ln.get("text") or "").strip()
+            if label and label not in used and re.search(
+                r"(?<!\w)" + re.escape(label) + r"(?!\w)", block
+            ):
+                picked.append(ln)
+                used.add(label)
+
+    out, seen = [], set()
+    for ln in picked:
+        url = ln.get("url")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        label = (ln.get("text") or "").strip() or "link"
+        out.append({"label": label, "url": url, "kind": _social_kind(label, url)})
+    return out
+
+
+def parse_message(text: str, links: list[dict] | None = None) -> dict[str, Any]:
+    """parse_tokenscan plus the fields that need the message's links."""
+    parsed = parse_tokenscan(text)
+    parsed["socials"] = extract_socials(text, links)
+    return parsed

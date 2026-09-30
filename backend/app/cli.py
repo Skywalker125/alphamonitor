@@ -11,7 +11,7 @@ import json
 import sys
 
 from .config import settings
-from .parser import parse_tokenscan
+from .parser import parse_message, parse_tokenscan
 
 
 def _client():
@@ -53,7 +53,7 @@ def main() -> None:
         from .database import db
 
         db.init_sync()
-        total, changed = db.reparse_all(parse_tokenscan)
+        total, changed = db.reparse_all(parse_message)
         print(f"Re-parsed {total} messages, {changed} updated.")
     elif cmd == "parse" and len(sys.argv) > 2:
         with open(sys.argv[2], encoding="utf-8") as f:
