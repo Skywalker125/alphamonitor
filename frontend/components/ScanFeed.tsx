@@ -5,6 +5,8 @@ import { api, scanKey, type FeedMeta, type ScanItem } from "@/lib/api";
 import { fmtNum, fmtUsd, gmgnUrl, timeAgo, telegramMsgUrl } from "@/lib/format";
 import { onScan } from "@/lib/stream";
 import { copyAddress, hasTextSelection } from "@/lib/copy";
+import { presenceClass, useChart, useFeedCount, useRegisterFeed } from "@/lib/board";
+import BackgroundChart from "./BackgroundChart";
 import FeedColumn, { type Filter } from "./FeedColumn";
 import TokenAvatar from "./TokenAvatar";
 
@@ -50,7 +52,9 @@ function dexImage(address: string | null, chain?: string | null) {
   return `https://dd.dexscreener.com/ds-data/tokens/${chain === "evm" ? "ethereum" : "solana"}/${address}.png`;
 }
 
-function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }) {
+function ScanRow({ s, now, fresh, chart }: { s: ScanItem; now: number; fresh: boolean; chart: boolean }) {
+  const count = useFeedCount(s.address);
+  const points = useChart(chart ? s.address : null);
   const [open, setOpen] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
   const p = s.parsed;
@@ -63,7 +67,7 @@ function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }
   return (
     <div
       ref={rowRef}
-      className={`row scan ${fresh ? "fresh" : ""} ${open ? "open" : ""}`}
+      className={`row scan ${presenceClass(count)} ${fresh ? "fresh" : ""} ${open ? "open" : ""}`}
       title="Click to copy the address and show details"
       onClick={() => {
         if (hasTextSelection(rowRef.current)) return; // user is selecting text, not clicking
@@ -71,6 +75,7 @@ function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }
         setOpen((o) => !o);
       }}
     >
+      {points && <BackgroundChart points={points} />}
       <TokenAvatar src={dexImage(s.address, p.chain)} symbol={s.symbol} />
       <div className="row-main">
         <div className="row-line">
@@ -197,6 +202,11 @@ export default function ScanFeed({ feed, now }: { feed: FeedMeta; now: number })
 
   const f = FILTERS.find((x) => x.id === filter) ?? FILTERS[0];
   const visible = useMemo(() => items.filter(f.test), [items, f]);
+  useRegisterFeed(
+    feed.key,
+    items.map((i) => i.address),
+    visible.slice(0, 2).map((i) => i.address),
+  );
 
   return (
     <FeedColumn
@@ -212,8 +222,8 @@ export default function ScanFeed({ feed, now }: { feed: FeedMeta; now: number })
       emptyText={feed.chats ? "Waiting for TokenScan messages…" : "No chats configured for this feed."}
       count={visible.length}
     >
-      {visible.map((s) => (
-        <ScanRow key={scanKey(s)} s={s} now={now} fresh={fresh.has(scanKey(s))} />
+      {visible.map((s, i) => (
+        <ScanRow key={scanKey(s)} s={s} now={now} fresh={fresh.has(scanKey(s))} chart={i < 2} />
       ))}
     </FeedColumn>
   );

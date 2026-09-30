@@ -53,6 +53,16 @@ uvicorn app.main:app --port 8001
 
 Telethon logs in as your **user account** (bots can't read other bots' messages), so you must be a member of every chat you list.
 
+### Row colours and charts
+
+- Each token row is tinted by how many feeds currently show that address: **red** = 1 feed,
+  **yellow** = 2, **green** = 3 or more (the Telegram calls feed counts too).
+- The first two rows of every feed get a faint price chart in the background (green rising, red
+  falling), from 1-second candles of Shrine's data API. Set `SHRINE_API_KEY=sk_...` in `backend/.env`.
+  The backend holds the single keyed Shrine connection (Shrine allows one candle socket per IP, and the
+  key never reaches the browser), fetches each chart token once however many feeds show it, and
+  refreshes every `CHART_REFRESH_SECONDS` (10). Status: `charts` in `/api/status`.
+
 ### API
 
 | Endpoint | Description |
@@ -60,7 +70,8 @@ Telethon logs in as your **user account** (bots can't read other bots' messages)
 | `GET /api/feeds` | The five feeds |
 | `GET /api/feeds/telegram?…` | Proxy to the calls API (same query params, sensible defaults) |
 | `GET /api/feeds/{key}/messages?limit=&before=` | Stored TokenScan messages for a feed |
-| `GET /api/stream` | SSE stream, `scan` events: `{feed, item}` |
+| `GET /api/stream` | SSE stream: `scan` events `{feed, item}`, `chart` events `{mint, points}` |
+| `POST /api/charts/want` | `{mints: [...]}`: the tokens the page wants charts for; returns cached charts |
 | `GET /api/status` | Telethon listener state and per-chat resolution errors |
 
 Run the parser tests with `pytest` in `backend/`. After a parser change, fix already stored

@@ -98,7 +98,17 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+/** [unix seconds, close price] points of a token's recent 1s candles. */
+export type ChartPoints = [number, number][];
+export type ChartEntry = { mint: string; pool?: string; points: ChartPoints; error?: string };
+
 export const api = {
+  wantCharts: (mints: string[]) =>
+    fetch(`${API_URL}/api/charts/want`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mints }),
+    }).then((r) => (r.ok ? (r.json() as Promise<{ enabled: boolean; error: string | null; charts: Record<string, ChartEntry> }>) : null)),
   feeds: () => getJson<FeedMeta[]>("/api/feeds"),
   status: () => getJson<{ telegram: ListenerStatus }>("/api/status"),
   calls: (params: Record<string, string>, signal?: AbortSignal) =>

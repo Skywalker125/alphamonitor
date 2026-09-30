@@ -35,6 +35,9 @@ class Settings:
     backfill_limit: int
     cors_origins: list[str]
     feeds: list[FeedConfig]
+    shrine_api_key: str | None
+    shrine_data_url: str
+    chart_refresh_seconds: float
 
     @property
     def tg_session_path(self) -> Path:
@@ -92,6 +95,9 @@ def load_settings() -> Settings:
             if o.strip()
         ],
         feeds=_load_feeds(os.getenv("FEEDS_FILE", "feeds.json")),
+        shrine_api_key=os.getenv("SHRINE_API_KEY", "").strip() or None,
+        shrine_data_url=os.getenv("SHRINE_DATA_URL", "https://shrine.trade/solana"),
+        chart_refresh_seconds=float(os.getenv("CHART_REFRESH_SECONDS", "10")),
     )
 
 

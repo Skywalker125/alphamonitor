@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import CallsFeed from "@/components/CallsFeed";
 import ScanFeed from "@/components/ScanFeed";
 import Toast from "@/components/Toast";
+import { BoardProvider } from "@/lib/board";
 import { api, type FeedMeta, type ListenerStatus } from "@/lib/api";
 import { useNow } from "@/lib/format";
 import { onConnection } from "@/lib/stream";
@@ -51,12 +52,14 @@ export default function Home() {
       {feedsError ? (
         <div className="notice notice-error">Backend unreachable: {feedsError}</div>
       ) : (
-        <main className="columns">
-          <CallsFeed now={now} />
-          {scanFeeds.map((f) => (
-            <ScanFeed key={f.key} feed={f} now={now} />
-          ))}
-        </main>
+        <BoardProvider>
+          <main className="columns">
+            <CallsFeed now={now} />
+            {scanFeeds.map((f) => (
+              <ScanFeed key={f.key} feed={f} now={now} />
+            ))}
+          </main>
+        </BoardProvider>
       )}
       <Toast />
     </div>

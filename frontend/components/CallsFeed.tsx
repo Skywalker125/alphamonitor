@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type CallItem } from "@/lib/api";
 import { fmtUsd, gmgnUrl, parseTs, timeAgo } from "@/lib/format";
 import { copyAddress, hasTextSelection } from "@/lib/copy";
+import { presenceClass, useCharts, useFeedCounts, useRegisterFeed } from "@/lib/board";
+import BackgroundChart from "./BackgroundChart";
 import FeedColumn, { type Filter } from "./FeedColumn";
 import TokenAvatar from "./TokenAvatar";
 
@@ -78,6 +80,13 @@ export default function CallsFeed({ now }: { now: number }) {
 
   const f = FILTERS.find((x) => x.id === filter) ?? FILTERS[0];
   const visible = useMemo(() => items.filter(f.test), [items, f]);
+  const counts = useFeedCounts();
+  const charts = useCharts();
+  useRegisterFeed(
+    "telegram",
+    items.map((c) => c.address),
+    visible.slice(0, 2).map((c) => c.address),
+  );
 
   return (
     <FeedColumn
@@ -93,7 +102,8 @@ export default function CallsFeed({ now }: { now: number }) {
       emptyText="No calls yet."
       count={visible.length}
     >
-      {visible.map((c) => {
+      {visible.map((c, i) => {
+        const points = i < 2 ? charts.get(c.address) : undefined;
         const mc = currentMc(c);
         const firstMc = c.first_call_market_cap;
         const mult = mc && firstMc ? mc / firstMc : null;
@@ -102,10 +112,11 @@ export default function CallsFeed({ now }: { now: number }) {
         return (
           <div
             key={c.id}
-            className={`row ${fresh.has(c.id) ? "fresh" : ""}`}
+            className={`row ${presenceClass(counts.get(c.address) ?? 0)} ${fresh.has(c.id) ? "fresh" : ""}`}
             title="Click to copy the token address"
             onClick={(e) => !hasTextSelection(e.currentTarget) && copyAddress(c.address, c.symbol)}
           >
+            {points && <BackgroundChart points={points} />}
             <TokenAvatar src={c.image_url} symbol={c.symbol} />
             <div className="row-main">
               <div className="row-line">
