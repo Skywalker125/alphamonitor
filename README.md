@@ -3,30 +3,24 @@
 Live dashboard with five feeds:
 
 1. **Telegram** – calls from your existing calls API (`http://localhost:8000/api/feed/calls`), polled every 5 s.
-2. **Scan feeds 1–4** – TokenScan bot messages scraped live with [Telethon](https://docs.telethon.dev) from Telegram groups/channels you choose, stored in Postgres and pushed to the browser over Server-Sent Events.
+2. **Scan feeds 1–4** – TokenScan bot messages scraped live with [Telethon](https://docs.telethon.dev) from Telegram groups/channels you choose, stored in SQLite and pushed to the browser over Server-Sent Events.
 
 ```
 frontend/  Next.js (App Router) UI            → http://localhost:3000
-backend/   FastAPI + Telethon + asyncpg        → http://localhost:8001
+backend/   FastAPI + Telethon + SQLite         → http://localhost:8001
 ```
 
 The backend runs on **8001** because your calls API already uses 8000. It proxies the calls API (`/api/feeds/telegram`), so the browser never talks to port 8000 directly.
 
-## 1. Postgres
-
-Use a local Postgres, or start one with `docker compose up -d postgres`.
-
-Create the database and tables (no `psql`/`createdb` needed):
+## 1. Database (SQLite – no server needed)
 
 ```bash
 cd backend
 python app/database/init.py
 ```
 
-This creates the database named in `DATABASE_URL` if it's missing and applies
-`app/database/schema.sql`. It is safe to re-run, and the backend does the same on startup.
-
-`DATABASE_URL` must use a Postgres user allowed to create databases (e.g. `postgres`) and its real password.
+Creates `backend/data/alphamonitor.db` (override with `DB_PATH`) and applies
+`app/database/schema.sql` in WAL mode. Safe to re-run; the backend does the same on startup.
 
 ## 2. Backend
 

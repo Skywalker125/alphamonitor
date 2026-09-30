@@ -23,7 +23,8 @@ class FeedConfig:
 
 @dataclass
 class Settings:
-    database_url: str
+    db_path: Path
+    db_busy_timeout_ms: int
     calls_api_url: str
     tg_api_id: int | None
     tg_api_hash: str | None
@@ -61,12 +62,20 @@ def _load_feeds(path: str) -> list[FeedConfig]:
     ]
 
 
+def _resolve(path: str | Path) -> Path:
+    """Relative paths are relative to the backend folder, not the current directory."""
+    p = Path(path)
+    return p if p.is_absolute() else BACKEND_DIR / p
+
+
 def load_settings() -> Settings:
     api_id = os.getenv("TG_API_ID", "").strip()
     return Settings(
-        database_url=os.getenv(
-            "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/alphamonitor"
+        db_path=_resolve(
+            os.getenv("DB_PATH")
+            or Path(os.getenv("DATA_DIR", "data")) / "alphamonitor.db"
         ),
+        db_busy_timeout_ms=int(os.getenv("DB_BUSY_TIMEOUT_MS", "5000")),
         calls_api_url=os.getenv("CALLS_API_URL", "http://localhost:8000/api/feed/calls"),
         tg_api_id=int(api_id) if api_id else None,
         tg_api_hash=os.getenv("TG_API_HASH", "").strip() or None,

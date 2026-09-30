@@ -33,7 +33,7 @@ listener = TelegramListener(settings)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.init(settings.database_url)
+    await db.init()
     app.state.http = httpx.AsyncClient(timeout=10)
     await listener.start()
     try:
