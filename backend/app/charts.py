@@ -9,6 +9,7 @@ result is pushed to the browser as a compact close-price series over SSE.
 import asyncio
 import logging
 import time
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -56,6 +57,34 @@ def to_points(candles: list[list[float]], max_points: int = MAX_POINTS) -> list[
     return [buckets[b] for b in sorted(buckets)]
 
 
+@dataclass(frozen=True)
+class Endpoint:
+    server: str
+    namespace: str = "/"
+    path: str = "socket.io"
+
+    def label(self) -> str:
+        return f"{self.server} namespace {self.namespace} path /{self.path.strip('/')}/"
+
+
+# Where the data API's Socket.IO server may live. The example repo's
+# io("https://shrine.trade/solana") answers 404 on /socket.io/, and Shrine's stream docs use
+# io("https://sol.shrine.trade"), so try the plausible layouts and keep the first that works.
+AUTO_ENDPOINTS = [
+    Endpoint("https://sol.shrine.trade", "/"),
+    Endpoint("https://shrine.trade", "/solana"),
+    Endpoint("https://shrine.trade", "/", "solana/socket.io"),
+    Endpoint("https://sol.shrine.trade", "/solana"),
+]
+
+
+def endpoints_for(url: str | None, socketio_path: str | None = None) -> list[Endpoint]:
+    if not url or url.strip().lower() == "auto":
+        return list(AUTO_ENDPOINTS)
+    server, namespace = split_namespace(url.strip())
+    return [Endpoint(server, namespace, (socketio_path or "socket.io").strip("/"))]
+
+
 def describe_error(e: BaseException) -> str:
     """The exception plus whatever it hides: python-engineio raises a bare
     'Connection error' and keeps the real aiohttp/SSL/DNS error only as its context."""
@@ -73,9 +102,11 @@ def describe_error(e: BaseException) -> str:
 
 
 class ChartService:
-    def __init__(self, url: str, api_key: str | None, refresh_seconds: float = 10) -> None:
-        self.url = url
-        self.server_url, self.namespace = split_namespace(url)
+    def __init__(self, url: str | None, api_key: str | None, refresh_seconds: float = 10,
+                 socketio_path: str | None = None, endpoints: list[Endpoint] | None = None) -> None:
+        self.endpoints = endpoints or endpoints_for(url, socketio_path)
+        self.endpoint: Endpoint | None = None  # the one that worked
+        self.attempts: list[str] = []
         self.api_key = api_key
         self.refresh_seconds = refresh_seconds
         self.wanted: dict[str, float] = {}
@@ -86,6 +117,10 @@ class ChartService:
         self.sio = socketio.AsyncClient(reconnection=True, reconnection_delay=2, reconnection_delay_max=60)
         self._task: asyncio.Task | None = None
         self._wake = asyncio.Event()
+
+    @property
+    def namespace(self) -> str:
+        return self.endpoint.namespace if self.endpoint else "/"
 
     @property
     def enabled(self) -> bool:
@@ -104,6 +139,7 @@ class ChartService:
         return {
             "enabled": self.enabled,
             "connected": self.sio.connected,
+            "endpoint": self.endpoint.label() if self.endpoint else None,
             "tracking": len(self.wanted),
             "error": self.error,
         }
@@ -126,29 +162,37 @@ class ChartService:
     async def _connect(self) -> bool:
         if self.sio.connected:
             return True
-        errors = []
-        # direct WebSocket first (what Shrine's example uses), then the standard
-        # polling -> WebSocket upgrade, which gets through where a direct upgrade is refused
-        for transports in (["websocket"], ["polling", "websocket"]):
-            try:
-                await self.sio.connect(
-                    self.server_url,
-                    namespaces=[self.namespace],
-                    transports=transports,
-                    auth={"api_key": self.api_key},
-                    wait_timeout=15,
-                )
-                self.error = None
-                log.info("Connected to Shrine OHLCV (%s, namespace %s)", "+".join(transports), self.namespace)
-                return True
-            except Exception as e:
-                errors.append(f"{'+'.join(transports)}: {describe_error(e)}")
+        self.attempts = []
+        # the endpoint that worked before goes first
+        order = sorted(self.endpoints, key=lambda ep: ep != self.endpoint)
+        for ep in order:
+            # direct WebSocket first (what Shrine's example uses), then the standard
+            # polling -> WebSocket upgrade, which gets through where a direct upgrade is refused
+            for transports in (["websocket"], ["polling", "websocket"]):
                 try:
-                    await self.sio.disconnect()
-                except Exception:
-                    pass
+                    await self.sio.connect(
+                        ep.server,
+                        namespaces=[ep.namespace],
+                        socketio_path=ep.path,
+                        transports=transports,
+                        auth={"api_key": self.api_key},
+                        wait_timeout=15,
+                    )
+                    self.endpoint, self.error = ep, None
+                    self.attempts.append(f"OK   {ep.label()} ({'+'.join(transports)})")
+                    log.info("Connected to Shrine OHLCV at %s", ep.label())
+                    return True
+                except Exception as e:
+                    err = describe_error(e)
+                    self.attempts.append(f"FAIL {ep.label()} ({'+'.join(transports)}): {err}")
+                    try:
+                        await self.sio.disconnect()
+                    except Exception:
+                        pass
+                    if "404" in err:
+                        break  # nothing there; polling would 404 too
         # a wrong or disabled key is refused at the handshake
-        self.error = "connect failed: " + " | ".join(errors)
+        self.error = "connect failed: " + " | ".join(a[5:] for a in self.attempts)
         log.warning("Shrine OHLCV %s", self.error)
         return False
 

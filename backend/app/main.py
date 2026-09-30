@@ -30,7 +30,12 @@ CALLS_DEFAULTS = {
 }
 
 listener = TelegramListener(settings)
-charts = ChartService(settings.shrine_data_url, settings.shrine_api_key, settings.chart_refresh_seconds)
+charts = ChartService(
+    settings.shrine_data_url,
+    settings.shrine_api_key,
+    settings.chart_refresh_seconds,
+    socketio_path=settings.shrine_socketio_path,
+)
 
 
 @asynccontextmanager

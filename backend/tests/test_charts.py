@@ -7,7 +7,7 @@ from aiohttp import web
 
 from app import charts as charts_mod
 from app.broadcaster import broadcaster
-from app.charts import ChartService, describe_error, split_namespace, to_points
+from app.charts import AUTO_ENDPOINTS, ChartService, Endpoint, describe_error, endpoints_for, split_namespace, to_points
 
 NS = "/solana"
 
@@ -142,3 +142,31 @@ def test_describe_error_shows_the_hidden_cause():
     except ConnectionError as e:
         text = describe_error(e)
     assert text.startswith("Connection error <- OSError: certificate verify failed")
+
+
+def test_endpoint_config():
+    assert endpoints_for("auto") == AUTO_ENDPOINTS and endpoints_for(None) == AUTO_ENDPOINTS
+    assert endpoints_for("https://shrine.trade/solana") == [Endpoint("https://shrine.trade", "/solana")]
+    assert endpoints_for("https://x.io", "/data/socket.io/") == [Endpoint("https://x.io", "/", "data/socket.io")]
+
+
+def test_falls_through_to_the_endpoint_that_works():
+    async def main():
+        port, calls = free_port(), []
+        runner = await fake_shrine(port, calls)
+        base = f"http://127.0.0.1:{port}"
+        svc = ChartService(None, "sk_test", refresh_seconds=0.3, endpoints=[
+            Endpoint(base, "/", "nothing/socket.io"),  # 404, like shrine.trade/socket.io/
+            Endpoint(f"http://127.0.0.1:{free_port()}", "/solana"),  # nothing listening
+            Endpoint(base, NS),  # the real one
+        ])
+        assert await svc._connect()
+        assert svc.endpoint == Endpoint(base, NS)
+        assert [a[:4] for a in svc.attempts] == ["FAIL", "FAIL", "FAIL", "OK  "]
+        assert "404" in svc.attempts[0] and len([a for a in svc.attempts if "nothing/socket.io" in a]) == 1
+        ack = await svc.sio.call("ohlcv_history", {"mint": "M", "limit": 500}, namespace=svc.namespace, timeout=5)
+        assert ack["ok"]
+        await svc.stop()
+        await runner.cleanup()
+
+    asyncio.run(main())

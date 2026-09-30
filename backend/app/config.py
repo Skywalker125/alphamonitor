@@ -37,6 +37,7 @@ class Settings:
     feeds: list[FeedConfig]
     shrine_api_key: str | None
     shrine_data_url: str
+    shrine_socketio_path: str | None
     chart_refresh_seconds: float
 
     @property
@@ -96,7 +97,8 @@ def load_settings() -> Settings:
         ],
         feeds=_load_feeds(os.getenv("FEEDS_FILE", "feeds.json")),
         shrine_api_key=os.getenv("SHRINE_API_KEY", "").strip() or None,
-        shrine_data_url=os.getenv("SHRINE_DATA_URL", "https://shrine.trade/solana"),
+        shrine_data_url=os.getenv("SHRINE_DATA_URL", "auto"),
+        shrine_socketio_path=os.getenv("SHRINE_SOCKETIO_PATH", "").strip() or None,
         chart_refresh_seconds=float(os.getenv("CHART_REFRESH_SECONDS", "10")),
     )
 

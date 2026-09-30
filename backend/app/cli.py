@@ -49,13 +49,21 @@ async def charts_check(mint: str) -> None:
 
     from .charts import ChartService
 
-    svc = ChartService(settings.shrine_data_url, settings.shrine_api_key)
+    svc = ChartService(settings.shrine_data_url, settings.shrine_api_key,
+                       socketio_path=settings.shrine_socketio_path)
     if not svc.enabled:
         sys.exit("SHRINE_API_KEY is not set in backend/.env")
-    print(f"Connecting to {svc.server_url} namespace {svc.namespace} ...")
-    if not await svc._connect():
-        sys.exit(svc.error)
-    print("Connected. Requesting ohlcv_history for", mint)
+    print(f"Trying {len(svc.endpoints)} endpoint(s) ...")
+    ok = await svc._connect()
+    for line in svc.attempts:
+        print("  " + line)
+    if not ok:
+        sys.exit("No endpoint worked. Paste these lines to get it fixed.")
+    ep = svc.endpoint
+    print(f"Connected to {ep.label()}")
+    print(f"(to pin it: SHRINE_DATA_URL={ep.server}{'' if ep.namespace == '/' else ep.namespace}"
+          f"{'' if ep.path == 'socket.io' else f' and SHRINE_SOCKETIO_PATH={ep.path}'})")
+    print("Requesting ohlcv_history for", mint)
     await svc._refresh(mint)
     entry = svc.cache.get(mint, {})
     if entry.get("error"):
