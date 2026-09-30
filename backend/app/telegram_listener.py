@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from telethon import TelegramClient, events, helpers, utils
@@ -13,6 +14,9 @@ from .config import FeedConfig, Settings
 from .parser import is_token_stats, parse_message
 
 log = logging.getLogger("alphamonitor.telegram")
+
+# Only scans younger than this start a live watch (older ones are history).
+FRESH_SECONDS = 120
 
 
 def _chat_ref(ref: str | int) -> str | int:
@@ -67,8 +71,9 @@ def _extract_buttons(msg: Any) -> list[dict[str, str | None]]:
 
 
 class TelegramListener:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, watcher: Any = None) -> None:
         self.settings = settings
+        self.watcher = watcher
         self.client: TelegramClient | None = None
         # peer id -> feeds that listen to it
         self.chat_feeds: dict[int, list[FeedConfig]] = {}
@@ -223,3 +228,11 @@ class TelegramListener:
             item = await db.upsert_scan({**base, "feed_key": feed.key})
             if publish:
                 broadcaster.publish("scan", {"feed": feed.key, "item": item})
+
+        # A fresh scan starts (or joins) a live watch. Edits and backfilled history don't.
+        age = (datetime.now(timezone.utc) - msg.date).total_seconds() if msg.date else 1e9
+        if publish and self.watcher and msg.edit_date is None and age <= FRESH_SECONDS:
+            try:
+                await self.watcher.submit(parsed["address"], [f.key for f in matching], parsed)
+            except Exception:
+                log.exception("Could not start watching %s", parsed["address"])

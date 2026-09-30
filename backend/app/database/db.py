@@ -206,3 +206,123 @@ def reparse_all(parse) -> tuple[int, int]:
         finally:
             conn.close()
     return len(rows), changed
+
+
+# ---------------------------------------------------------------- entry signals
+
+SESSION_JSON = ("evaluation", "reasons", "sources", "context")
+
+
+def _session_row(row: sqlite3.Row) -> dict[str, Any]:
+    item = dict(row)
+    for k in SESSION_JSON:
+        if item.get(k) is not None:
+            item[k] = json.loads(item[k])
+    return item
+
+
+def insert_session(rec: dict[str, Any]) -> int:
+    with _write_lock:
+        conn = get_connection()
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO watch_sessions (mint, symbol, name, status, started_at, sources,
+                                            context, start_mc, updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    rec["mint"], rec.get("symbol"), rec.get("name"), rec["status"],
+                    ts(rec["started_at"]), json.dumps(rec.get("sources") or []),
+                    json.dumps(rec.get("context") or {}), rec.get("start_mc"),
+                    ts(rec["started_at"]),
+                ),
+            )
+            return int(cur.lastrowid)
+        finally:
+            conn.close()
+
+
+_UPDATABLE = {
+    "status", "decided_at", "tracking_until", "score", "best_score", "evaluation", "reasons",
+    "sources", "trades", "start_mc", "entry_mc", "entry_price", "last_mc", "peak_mc", "mc_5m",
+    "mc_10m", "dismissed_at",
+}
+
+
+def update_session(session_id: int, fields: dict[str, Any]) -> None:
+    fields = {k: v for k, v in fields.items() if k in _UPDATABLE}
+    if not fields:
+        return
+    fields["updated_at"] = datetime.now(timezone.utc)
+    cols, vals = [], []
+    for k, v in fields.items():
+        if k in SESSION_JSON and v is not None:
+            v = json.dumps(v)
+        elif isinstance(v, datetime):
+            v = ts(v)
+        cols.append(f"{k} = ?")
+        vals.append(v)
+    with _write_lock:
+        conn = get_connection()
+        try:
+            conn.execute(f"UPDATE watch_sessions SET {', '.join(cols)} WHERE id = ?", (*vals, session_id))
+        finally:
+            conn.close()
+
+
+def insert_trades(rows: list[tuple]) -> None:
+    if not rows:
+        return
+    with _write_lock:
+        conn = get_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.executemany(
+                "INSERT INTO watch_trades (session_id, t, side, quote, price, mc_quote, "
+                "quote_in_pool, traders, pool, signature) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                rows,
+            )
+            conn.execute("COMMIT")
+        finally:
+            conn.close()
+
+
+def recent_sessions(since: datetime, limit: int = 300) -> list[dict[str, Any]]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM watch_sessions WHERE started_at >= ? OR status = 'WATCHING' "
+            "ORDER BY started_at DESC LIMIT ?",
+            (ts(since), limit),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [_session_row(r) for r in rows]
+
+
+def session_history(limit: int = 200, status: str | None = None) -> list[dict[str, Any]]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM watch_sessions WHERE (? IS NULL OR status = ?) "
+            "AND status != 'WATCHING' ORDER BY decided_at DESC LIMIT ?",
+            (status, status, limit),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [_session_row(r) for r in rows]
+
+
+def close_stale_watching() -> int:
+    """Sessions left WATCHING by a previous run can never be decided: mark them SKIPPED."""
+    with _write_lock:
+        conn = get_connection()
+        try:
+            cur = conn.execute(
+                "UPDATE watch_sessions SET status = 'SKIPPED', decided_at = updated_at, "
+                "reasons = json('[\"Backend restarted while watching\"]') WHERE status = 'WATCHING'"
+            )
+            return cur.rowcount
+        finally:
+            conn.close()

@@ -1,0 +1,35 @@
+{
+  "_comment": "Entry-signal model. Positive components add up to 100; penalties subtract. No hard filters: every check only moves the score.",
+  "entry_score": 70,
+  "consecutive_passes": 2,
+  "full_confidence_trades": 20,
+
+  "ofi_full": 0.30,
+  "accel_full": 1.5,
+  "unique_buyers_full": 25,
+  "new_buyers_full": 8,
+  "top_buyer_share_full": 0.15,
+  "top_buyer_share_zero": 0.50,
+  "trend_return_low": 0.05,
+  "trend_return_high": 0.80,
+  "trend_return_chase": 1.50,
+
+  "weights": {
+    "order_flow": 25,
+    "acceleration": 15,
+    "participation": 15,
+    "dispersion": 15,
+    "trend": 20,
+    "confluence": 10
+  },
+
+  "penalties": {
+    "top10_pct":      {"from": 30, "to": 50, "points": 10},
+    "bundled_pct":    {"from": 30, "to": 60, "points": 15},
+    "sniped_pct":     {"from": 15, "to": 35, "points": 8},
+    "drawdown_pct":   {"from": 15, "to": 35, "points": 20},
+    "mc_drop_pct":    {"from": 10, "to": 30, "points": 15},
+    "whale_sell_pct": {"from": 2,  "to": 6,  "points": 15},
+    "liquidity_removed": 40
+  }
+}

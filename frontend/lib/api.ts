@@ -86,6 +86,41 @@ export type ListenerStatus = {
   chats: Record<string, { ok: boolean; id?: number; title?: string; error?: string }>;
 };
 
+/** One watch of a token on the live trade stream (backend watch_sessions row). */
+export type WatchSession = {
+  id: number;
+  mint: string;
+  symbol: string | null;
+  name: string | null;
+  status: "WATCHING" | "ENTRY" | "SKIPPED";
+  tracking: boolean;
+  started_at: string;
+  decided_at: string | null;
+  tracking_until: string | null;
+  max_seconds: number | null;
+  score: number | null;
+  best_score: number | null;
+  reasons: string[];
+  sources: string[];
+  trades: number;
+  start_mc: number | null;
+  entry_mc: number | null;
+  last_mc: number | null;
+  peak_mc: number | null;
+  mc_5m: number | null;
+  mc_10m?: number | null;
+  dismissed_at: string | null;
+};
+
+export type SignalsStatus = {
+  enabled: boolean;
+  stream?: { connected: boolean; events_per_s: number; error: string | null };
+  watching?: number;
+  tracking_entries?: number;
+  queued?: number;
+  sol_usd?: number | null;
+};
+
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const r = await fetch(`${API_URL}${path}`, { signal, cache: "no-store" });
   if (!r.ok) {
@@ -99,8 +134,11 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 }
 
 export const api = {
+  signals: (minutes = 60) => getJson<{ enabled: boolean; sessions: WatchSession[] }>(`/api/signals?minutes=${minutes}`),
+  dismissSignal: (mint: string) =>
+    fetch(`${API_URL}/api/signals/${encodeURIComponent(mint)}/dismiss`, { method: "POST" }).then((r) => r.ok),
   feeds: () => getJson<FeedMeta[]>("/api/feeds"),
-  status: () => getJson<{ telegram: ListenerStatus }>("/api/status"),
+  status: () => getJson<{ telegram: ListenerStatus; signals?: SignalsStatus }>("/api/status"),
   calls: (params: Record<string, string>, signal?: AbortSignal) =>
     getJson<{ items: CallItem[] }>(`/api/feeds/telegram?${new URLSearchParams(params)}`, signal),
   scans: (feed: string, limit = 100) =>

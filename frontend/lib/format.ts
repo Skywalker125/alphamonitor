@@ -64,3 +64,19 @@ export function telegramMsgUrl(chatId: number, messageId: number, username?: str
   const internal = String(Math.abs(chatId)).replace(/^100/, "");
   return `https://t.me/c/${internal}/${messageId}`;
 }
+
+/** Token logo from DexScreener's CDN (TokenAvatar falls back to initials if it's missing). */
+export function tokenImage(address: string | null | undefined, chain?: string | null) {
+  if (!address) return null;
+  return `https://dd.dexscreener.com/ds-data/tokens/${chain === "evm" ? "ethereum" : "solana"}/${address}.png`;
+}
+
+export function fmtDuration(seconds: number) {
+  const s = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+export function pctChange(now: number | null | undefined, then: number | null | undefined) {
+  if (now == null || then == null || !then) return null;
+  return (now / then - 1) * 100;
+}

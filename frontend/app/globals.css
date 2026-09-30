@@ -83,7 +83,9 @@ button { font: inherit; color: inherit; }
 }
 
 .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.row-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.row-line { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.row-line > * { flex-shrink: 0; }
+.row-line > .name, .row-line > .ellipsis { flex-shrink: 1; }
 .row-line.sub { color: var(--text); font-size: 12px; white-space: nowrap; }
 .sym { font-weight: 700; font-size: 14px; }
 .name { overflow: hidden; text-overflow: ellipsis; max-width: 45%; flex-shrink: 1; }
@@ -151,3 +153,54 @@ a.chip-btn { display: inline-block; line-height: 1.4; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .row.scan.open { background: var(--row-hover); }
 .socials-label { font-size: 11px; color: var(--dim); align-self: center; margin-right: 2px; }
+
+/* ---- entry signals ---- */
+.signals { border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(31, 209, 160, 0.06), transparent); }
+.signals-head { display: flex; align-items: center; gap: 10px; padding: 8px 16px 0; font-size: 12px; }
+.signals-title { font-weight: 800; font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--accent); }
+.signals-body { display: flex; gap: 12px; padding: 8px 16px 10px; min-width: 0; }
+.entries { display: flex; gap: 10px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: thin; }
+.entries-empty { font-size: 12px; padding: 14px 0; }
+.entry-card {
+  position: relative; flex: 0 0 300px; background: var(--panel); border: 1px solid rgba(31, 209, 160, 0.45);
+  border-radius: 12px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 6px;
+  box-shadow: 0 0 0 1px rgba(31, 209, 160, 0.08), 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.entry-card:hover { border-color: var(--accent); }
+.entry-card.ended { border-color: var(--border); opacity: 0.7; box-shadow: none; }
+.entry-dismiss {
+  position: absolute; top: 4px; right: 6px; border: none; background: none; color: var(--dim);
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 4px;
+}
+.entry-dismiss:hover { color: var(--text); }
+.entry-top { display: flex; align-items: center; gap: 10px; }
+.entry-id { min-width: 0; flex: 1; }
+.entry-sym { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.entry-name { color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry-mc { text-align: right; margin-right: 14px; }
+.entry-mc-value { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; transition: color 0.3s; }
+.entry-mc-value.up { color: var(--green); }
+.entry-mc-value.down { color: var(--red); }
+.entry-mc-sub { font-size: 10.5px; }
+.live-dot { color: var(--green); font-weight: 700; }
+.entry-stats { display: flex; gap: 10px; font-size: 11.5px; color: var(--dim); flex-wrap: wrap; }
+.entry-stats b { color: var(--text); font-weight: 700; }
+.entry-reasons { display: flex; gap: 5px; flex-wrap: wrap; }
+.reason { font-size: 10.5px; background: var(--chip); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; }
+.entry-sources { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.watch-side {
+  flex: 0 0 280px; display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto;
+  border-left: 1px solid var(--border); padding-left: 12px;
+}
+.watch-chip { display: flex; align-items: center; gap: 8px; font-size: 11.5px; cursor: pointer; padding: 2px 0; }
+.watch-chip:hover .sym-sm { color: var(--accent); }
+.watch-chip.skipped { opacity: 0.6; }
+.sym-sm { font-weight: 700; min-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-bar { flex: 1; height: 4px; background: var(--chip); border-radius: 2px; overflow: hidden; min-width: 40px; }
+.watch-bar span { display: block; height: 100%; background: var(--accent); transition: width 0.5s linear; }
+.badge-watch { background: rgba(91, 140, 255, 0.15); color: #7aa2ff; }
+@media (max-width: 900px) {
+  .signals-body { flex-direction: column; }
+  .watch-side { flex: none; border-left: none; padding-left: 0; }
+  .entry-card { flex-basis: calc(100vw - 48px); }
+}

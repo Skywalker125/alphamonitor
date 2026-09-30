@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import CallsFeed from "@/components/CallsFeed";
+import EntrySignals from "@/components/EntrySignals";
 import ScanFeed from "@/components/ScanFeed";
 import Toast from "@/components/Toast";
-import { api, type FeedMeta, type ListenerStatus } from "@/lib/api";
+import { api, type FeedMeta, type ListenerStatus, type SignalsStatus } from "@/lib/api";
 import { useNow } from "@/lib/format";
+import { SignalsProvider } from "@/lib/signals";
 import { onConnection } from "@/lib/stream";
 
 export default function Home() {
@@ -13,13 +15,21 @@ export default function Home() {
   const [feeds, setFeeds] = useState<FeedMeta[] | null>(null);
   const [feedsError, setFeedsError] = useState<string | null>(null);
   const [status, setStatus] = useState<ListenerStatus | null>(null);
+  const [signalsStatus, setSignalsStatus] = useState<SignalsStatus | undefined>();
   const [live, setLive] = useState(false);
 
   useEffect(() => {
     api.feeds().then(setFeeds).catch((e) => setFeedsError((e as Error).message));
-    const loadStatus = () => api.status().then((s) => setStatus(s.telegram)).catch(() => setStatus(null));
+    const loadStatus = () =>
+      api
+        .status()
+        .then((s) => {
+          setStatus(s.telegram);
+          setSignalsStatus(s.signals);
+        })
+        .catch(() => setStatus(null));
     loadStatus();
-    const id = setInterval(loadStatus, 15000);
+    const id = setInterval(loadStatus, 10000);
     const off = onConnection(setLive);
     return () => {
       clearInterval(id);
@@ -30,6 +40,7 @@ export default function Home() {
   const scanFeeds = (feeds ?? []).filter((f) => f.kind === "scan");
 
   return (
+    <SignalsProvider>
     <div className="app">
       <nav className="topbar">
         <span className="logo">
@@ -48,6 +59,7 @@ export default function Home() {
         <span className={`live ${live ? "on" : ""}`}>● {live ? "LIVE" : "OFFLINE"}</span>
         {status?.error && <span className="head-error">{status.error}</span>}
       </div>
+      {feeds && <EntrySignals feeds={feeds} status={signalsStatus} />}
       {feedsError ? (
         <div className="notice notice-error">Backend unreachable: {feedsError}</div>
       ) : (
@@ -60,5 +72,6 @@ export default function Home() {
       )}
       <Toast />
     </div>
+    </SignalsProvider>
   );
 }

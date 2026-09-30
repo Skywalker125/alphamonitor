@@ -61,10 +61,38 @@ Telethon logs in as your **user account** (bots can't read other bots' messages)
 | `GET /api/feeds/telegram?…` | Proxy to the calls API (same query params, sensible defaults) |
 | `GET /api/feeds/{key}/messages?limit=&before=` | Stored TokenScan messages for a feed |
 | `GET /api/stream` | SSE stream, `scan` events: `{feed, item}` |
-| `GET /api/status` | Telethon listener state and per-chat resolution errors |
+| `GET /api/status` | Telethon listener state, per-chat errors, trade-stream and watcher state |
+| `GET /api/signals?minutes=60` | Watch sessions (watching / entry / skipped) with live state |
+| `POST /api/signals/{mint}/dismiss` | Hide an entry card (its outcome is still recorded) |
+| `GET /api/signals/history` | Decided sessions with outcomes, for tuning |
 
 Run the parser tests with `pytest` in `backend/`. After a parser change, fix already stored
 messages with `python -m app.cli reparse` (no need to delete the database).
+
+## Entry signals
+
+Every **new** TokenScan token (message under 2 min old, not an edit) is watched live on
+[Shrine's](https://sol.shrine.trade) free, keyless Socket.IO trade stream for 60–180 s and scored.
+Tokens that qualify appear in the **Entry signals** box above the feeds with a live market cap for
+10 minutes. Feed rows show a badge: `👁 1:24` watching, `✅ ENTRY 78`, `✖ skip 42`.
+
+- **One watch per token.** The same address from several feeds or messages joins the running watch
+  (each extra feed counts towards the score). One socket, subscribed once; events for other tokens
+  are dropped with a set lookup. Up to `WATCH_CAPACITY` (100) tokens at a time, the rest queue for 2 min.
+- **Score (0–100), every 5 s:** order-flow imbalance (buy vs sell volume), trade-rate acceleration,
+  unique/new buyers, buyer dispersion (share of the biggest buyer), trend quality (return, higher lows,
+  above VWAP) and confluence (feeds, audit, DEX paid).
+- **No hard filters.** Risks only subtract points: TokenScan top-10 / bundled / sniped %, drawdown from
+  the high, MC drop since the watch started, a single sell that's a large share of the pool, liquidity
+  removed. With few trades the score is scaled down instead of blocked.
+- **ENTRY** needs score ≥ 70 on two evaluations in a row, from 60 s on. No ENTRY by 180 s → skipped.
+- Weights and thresholds live in `backend/signals.json`. Every session is stored with its score breakdown,
+  raw trades and outcome (MC at entry, +5 min, +10 min, peak; skips get +10 min too), so you can check the
+  hit rate at `GET /api/signals/history` and tune.
+- Market caps are in USD using SOL/USD from Jupiter (CoinGecko fallback). Stream health is in `/api/status`.
+- Turn it off with `SIGNALS_ENABLED=false`.
+
+This is a transparent momentum/order-flow heuristic, not a proven edge. Judge it by the recorded outcomes.
 
 ## 3. Frontend
 

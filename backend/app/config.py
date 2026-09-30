@@ -35,6 +35,13 @@ class Settings:
     backfill_limit: int
     cors_origins: list[str]
     feeds: list[FeedConfig]
+    signals_enabled: bool
+    shrine_url: str
+    signals_file: Path
+    watch_min_seconds: float
+    watch_max_seconds: float
+    entry_track_minutes: float
+    watch_capacity: int
 
     @property
     def tg_session_path(self) -> Path:
@@ -92,6 +99,13 @@ def load_settings() -> Settings:
             if o.strip()
         ],
         feeds=_load_feeds(os.getenv("FEEDS_FILE", "feeds.json")),
+        signals_enabled=os.getenv("SIGNALS_ENABLED", "true").strip().lower() not in ("0", "false", "no"),
+        shrine_url=os.getenv("SHRINE_URL", "https://sol.shrine.trade"),
+        signals_file=_resolve(os.getenv("SIGNALS_FILE", "signals.json")),
+        watch_min_seconds=float(os.getenv("WATCH_MIN_SECONDS", "60")),
+        watch_max_seconds=float(os.getenv("WATCH_MAX_SECONDS", "180")),
+        entry_track_minutes=float(os.getenv("ENTRY_TRACK_MINUTES", "10")),
+        watch_capacity=int(os.getenv("WATCH_CAPACITY", "100")),
     )
 
 

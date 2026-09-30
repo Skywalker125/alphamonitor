@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, scanKey, type FeedMeta, type ScanItem } from "@/lib/api";
-import { fmtNum, fmtUsd, gmgnUrl, timeAgo, telegramMsgUrl } from "@/lib/format";
+import { fmtNum, fmtUsd, gmgnUrl, timeAgo, telegramMsgUrl, tokenImage } from "@/lib/format";
 import { onScan } from "@/lib/stream";
 import { copyAddress, hasTextSelection } from "@/lib/copy";
 import FeedColumn, { type Filter } from "./FeedColumn";
+import SignalBadge from "./SignalBadge";
 import TokenAvatar from "./TokenAvatar";
 
 const MAX_ITEMS = 200;
@@ -45,10 +46,6 @@ function pctClass(v: number | undefined, warn: number, bad: number) {
   return "pos";
 }
 
-function dexImage(address: string | null, chain?: string | null) {
-  if (!address) return null;
-  return `https://dd.dexscreener.com/ds-data/tokens/${chain === "evm" ? "ethereum" : "solana"}/${address}.png`;
-}
 
 function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }) {
   const [open, setOpen] = useState(false);
@@ -71,19 +68,20 @@ function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }
         setOpen((o) => !o);
       }}
     >
-      <TokenAvatar src={dexImage(s.address, p.chain)} symbol={s.symbol} />
+      <TokenAvatar src={tokenImage(s.address, p.chain)} symbol={s.symbol} />
       <div className="row-main">
         <div className="row-line">
           <span className="sym">{s.symbol ?? "?"}</span>
+          <span className="amount">{fmtUsd(s.market_cap)}</span>
           {p.audit_score != null && (
             <span className={`badge ${auditClass(p.audit_score, p.audit_max)}`}>
               Audit {p.audit_score}/{p.audit_max ?? 10}
             </span>
           )}
           {p.age && <span className="badge badge-muted">🌱 {p.age}</span>}
-          <span className="amount">{fmtUsd(s.market_cap)}</span>
         </div>
         <div className="row-line sub">
+          <SignalBadge mint={s.address} now={now} />
           <span className="name">{s.name}</span>
           {trigger ? (
             <span className="dim ellipsis">· {trigger}</span>
