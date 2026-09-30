@@ -189,10 +189,10 @@ def extract_socials(text: str, links: list[dict] | None) -> list[dict[str, str]]
     end = len(text) if end == -1 else end
     block = text[start:end]
 
-    if any("offset" in ln for ln in links):
-        picked = [ln for ln in links if start <= ln.get("offset", -1) < end]
-    else:
-        picked, used = [], set()
+    picked = [ln for ln in links if "offset" in ln and start <= ln["offset"] < end]
+    if not picked:
+        # No positions (older rows) or they didn't line up: match the labels on those lines.
+        used = set()
         for ln in links:
             label = (ln.get("text") or "").strip()
             if label and label not in used and re.search(

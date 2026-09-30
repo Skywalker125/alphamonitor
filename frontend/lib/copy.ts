@@ -37,8 +37,10 @@ export async function copyAddress(address: string, symbol?: string | null) {
   return ok;
 }
 
-/** True while the user is selecting text, so a click that ends a drag-select doesn't copy. */
-export function hasTextSelection() {
+/** True when the click ended a drag-select inside `within`, so selecting text doesn't copy.
+ *  A selection elsewhere on the page never blocks the click. */
+export function hasTextSelection(within?: Element | null) {
   const sel = window.getSelection();
-  return !!sel && sel.type === "Range" && sel.toString().length > 0;
+  if (!sel || sel.isCollapsed || sel.toString().length === 0) return false;
+  return !within || within.contains(sel.anchorNode);
 }

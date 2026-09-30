@@ -104,7 +104,7 @@ export default function CallsFeed({ now }: { now: number }) {
             key={c.id}
             className={`row ${fresh.has(c.id) ? "fresh" : ""}`}
             title="Click to copy the token address"
-            onClick={() => !hasTextSelection() && copyAddress(c.address, c.symbol)}
+            onClick={(e) => !hasTextSelection(e.currentTarget) && copyAddress(c.address, c.symbol)}
           >
             <TokenAvatar src={c.image_url} symbol={c.symbol} />
             <div className="row-main">

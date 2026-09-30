@@ -174,3 +174,8 @@ def test_socials_fallback_without_offsets():
 
 def test_no_socials_without_links():
     assert parse_message(SAMPLE, [])["socials"] == []
+
+
+def test_socials_fallback_when_offsets_do_not_line_up():
+    links = [{"text": "𝕏", "url": "https://x.com/cult", "offset": 3}, {"text": "About", "url": "https://t.me/a", "offset": 5}]
+    assert [s["kind"] for s in parse_message(SAMPLE, links)["socials"]] == ["x", "telegram"]

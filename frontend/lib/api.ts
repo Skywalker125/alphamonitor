@@ -57,6 +57,7 @@ export type ScanParsed = {
   address?: string | null;
   chain?: string | null;
   socials?: { label: string; url: string; kind: string }[];
+  socials_age?: string;
 };
 
 export type ScanItem = {

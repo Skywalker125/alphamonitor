@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, scanKey, type FeedMeta, type ScanItem } from "@/lib/api";
 import { fmtNum, fmtUsd, gmgnUrl, timeAgo, telegramMsgUrl } from "@/lib/format";
 import { onScan } from "@/lib/stream";
@@ -52,6 +52,7 @@ function dexImage(address: string | null, chain?: string | null) {
 
 function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }) {
   const [open, setOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
   const p = s.parsed;
   const trigger = s.reply
     ? [s.reply.sender_name, s.reply.text.split("\n").find((l) => l.trim())].filter(Boolean).join(": ")
@@ -61,9 +62,14 @@ function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }
 
   return (
     <div
-      className={`row scan ${fresh ? "fresh" : ""}`}
-      title={s.address ? "Click to copy the token address" : undefined}
-      onClick={() => s.address && !hasTextSelection() && copyAddress(s.address, s.symbol)}
+      ref={rowRef}
+      className={`row scan ${fresh ? "fresh" : ""} ${open ? "open" : ""}`}
+      title="Click to copy the address and show details"
+      onClick={() => {
+        if (hasTextSelection(rowRef.current)) return; // user is selecting text, not clicking
+        if (s.address) copyAddress(s.address, s.symbol);
+        setOpen((o) => !o);
+      }}
     >
       <TokenAvatar src={dexImage(s.address, p.chain)} symbol={s.symbol} />
       <div className="row-main">
@@ -103,6 +109,7 @@ function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }
         </div>
         {socials.length > 0 && (
           <div className="socials">
+            <span className="socials-label">Socials{p.socials_age ? ` ${p.socials_age}` : ""}</span>
             {socials.map((so) => (
               <a
                 key={so.url}
@@ -143,16 +150,9 @@ function ScanRow({ s, now, fresh }: { s: ScanItem; now: number; fresh: boolean }
         <span className="ago" title={new Date(s.posted_at).toLocaleString()}>
           {timeAgo(Date.parse(s.posted_at), now)}
         </span>
-        <button
-          className={`chip chip-btn ${open ? "active" : ""}`}
-          title={open ? "Hide message" : "Show full message and links"}
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen((o) => !o);
-          }}
-        >
+        <span className={`chip chip-btn ${open ? "active" : ""}`} aria-hidden>
           {open ? "▴" : "▾"}
-        </button>
+        </span>
         {s.chat_title && <span className="chat" title={s.chat_title}>{s.chat_title}</span>}
       </div>
     </div>

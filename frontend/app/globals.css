@@ -149,3 +149,5 @@ a.chip-btn { display: inline-block; line-height: 1.4; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.row.scan.open { background: var(--row-hover); }
+.socials-label { font-size: 11px; color: var(--dim); align-self: center; margin-right: 2px; }
